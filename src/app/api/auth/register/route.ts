@@ -62,6 +62,11 @@ export async function POST(req: Request) {
             )
         }
 
+        const emailVerified = await db.get(`signup:verified:${email}`)
+        if (emailVerified !== "1") {
+            return new Response(JSON.stringify({ message: "Please verify your email address before creating an account." }), { status: 403, headers: { "Content-Type": "application/json" } })
+        }
+
         // Hash password securely with bcrypt work factor 12
         const hashedPassword = await bcrypt.hash(password, 12)
 
@@ -87,6 +92,7 @@ export async function POST(req: Request) {
         pipeline.set(`user:name:${name.toLowerCase().trim()}`, userId)
         pipeline.sadd('users', userId)
         await pipeline.exec()
+        await db.del(`signup:verified:${email}`)
 
         // Return sanitized user object without sensitive fields
         return new Response(
