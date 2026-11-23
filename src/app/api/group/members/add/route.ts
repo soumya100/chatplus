@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { fetchRedis } from "@/helpers/redis"
 import {
     commitGroupMembershipAtomically,
     GroupMembershipCommitInput
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
         let committed: { group: Group; addedCount: number; addedIds: string[]; systemMessage: Message } | null = null
 
         for (let attempt = 0; attempt < MAX_COMMIT_ATTEMPTS && !committed; attempt++) {
-            const groupRaw = await db.get(groupKey)
+            const groupRaw = await fetchRedis("get", groupKey)
             if (!groupRaw) return Response.json({ message: "Group not found" }, { status: 404 })
 
             const expectedRaw = typeof groupRaw === "string" ? groupRaw : JSON.stringify(groupRaw)
@@ -154,7 +155,7 @@ export async function POST(req: Request) {
                 expectedRaw: ""
             }
             if (communityId) {
-                const rawCommunity = await db.get(`community:${communityId}`)
+                const rawCommunity = await fetchRedis("get", `community:${communityId}`)
                 if (rawCommunity) {
                     const communityDoc = decode<{ memberIds?: string[]; updatedAt?: number } & Record<string, unknown>>(rawCommunity)
                     communityDoc.memberIds = Array.from(new Set([...(communityDoc.memberIds || []), ...validMemberIds]))
