@@ -39,6 +39,7 @@ export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions)
         if (!session?.user?.id) return Response.json({ message: "Unauthorized" }, { status: 401 })
+        const isSuperAdmin = Boolean(session.user.isSuperAdmin)
 
         let body: unknown
         // A malformed request body is rejected with a typed 400 — it is
@@ -67,10 +68,10 @@ export async function POST(req: Request) {
             const expectedRaw = typeof groupRaw === "string" ? groupRaw : JSON.stringify(groupRaw)
             const group = decode<Group>(groupRaw)
             const existingMemberIds = group.memberIds || []
-            const isMember = existingMemberIds.includes(session.user.id)
+            const isMember = existingMemberIds.includes(session.user.id) || isSuperAdmin
             if (!isMember) return Response.json({ message: "You are not a member of this group" }, { status: 403 })
 
-            const isAdmin = resolveAdminIds(group).includes(session.user.id)
+            const isAdmin = resolveAdminIds(group).includes(session.user.id) || isSuperAdmin
 
             // Authorization contract (stated requirement R-AUTH-1 of this PR's
             // group-settings redesign, asserted by tests/group-api.test.cjs):
