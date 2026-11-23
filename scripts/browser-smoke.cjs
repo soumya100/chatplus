@@ -216,7 +216,6 @@ async function exerciseBrowser(name, browserType) {
     await page.getByRole("button", { name: "Send OTP" }).click();
     await page.getByRole("dialog", { name: /verify your email/i }).waitFor();
     await page.locator("#signup-otp").fill("123456");
-    await page.getByRole("button", { name: "Verify" }).click();
     await page.getByText("Email verified").waitFor();
     await submitSignupExpecting(
       page, name,
