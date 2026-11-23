@@ -5,6 +5,7 @@ import { registerSchema } from "@/lib/validations/auth"
 import { generateInitialsAvatar } from "@/lib/avatars"
 import bcrypt from "bcryptjs"
 import { nanoid } from "nanoid"
+import { createHash } from "crypto"
 
 export async function POST(req: Request) {
     try {
@@ -62,7 +63,8 @@ export async function POST(req: Request) {
             )
         }
 
-        const emailVerified = await db.get(`signup:verified:${email}`)
+        const emailKey = createHash("sha256").update(email).digest("hex")
+        const emailVerified = await db.get(`signup:verified:${emailKey}`)
         if (emailVerified !== "1") {
             return new Response(JSON.stringify({ message: "Please verify your email address before creating an account." }), { status: 403, headers: { "Content-Type": "application/json" } })
         }
@@ -92,7 +94,7 @@ export async function POST(req: Request) {
         pipeline.set(`user:name:${name.toLowerCase().trim()}`, userId)
         pipeline.sadd('users', userId)
         await pipeline.exec()
-        await db.del(`signup:verified:${email}`)
+        await db.del(`signup:verified:${emailKey}`)
 
         // Return sanitized user object without sensitive fields
         return new Response(
