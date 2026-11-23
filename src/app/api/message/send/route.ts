@@ -115,14 +115,14 @@ export async function POST(req: Request) {
         if (chatId.startsWith('group--')) {
             const groupId = chatId.replace('group--', '')
             const isMember = (await db.sismember(`group:${groupId}:members`, session.user.id)) as 0 | 1
-            if (!isMember) {
+            if (!isMember && !session.user.isSuperAdmin) {
                 return new Response('Unauthorized: You are not a member of this group', { status: 403 })
             }
 
             const groupRaw = await db.get(`group:${groupId}`)
             if (!groupRaw) return new Response('Group not found', { status: 404 })
             const group = (typeof groupRaw === 'string' ? JSON.parse(groupRaw) : groupRaw) as Group
-            const isAdmin = resolveAdminIds(group).includes(session.user.id)
+            const isAdmin = resolveAdminIds(group).includes(session.user.id) || session.user.isSuperAdmin
             if ((group.settings?.onlyAdminsCanSendMessages || group.settings?.announcementsOnly) && !isAdmin) {
                 return new Response('Only group admins can send messages', { status: 403 })
             }
