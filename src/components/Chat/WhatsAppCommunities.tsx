@@ -11,7 +11,7 @@ type Announcement = { id: string; authorId: string; authorName: string; text: st
 type Community = {
   id: string; name: string; description?: string; groupIds: string[]; ownerId: string;
   memberIds: string[]; members?: CommunityMember[]; adminIds?: string[];
-  isAdmin?: boolean; isOwner?: boolean; isSuperAdmin?: boolean;
+  isAdmin?: boolean; isOwner?: boolean; isSuperAdmin?: boolean; isSuperAdmin?: boolean;
 }
 type Props = { groups: Group[]; sessionId: string }
 
