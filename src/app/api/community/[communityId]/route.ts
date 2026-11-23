@@ -62,6 +62,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
   try {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
+    const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
     if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
     const parsed = schema.safeParse(await req.json())
     if (!parsed.success) return Response.json({ message: "Invalid community action" }, { status: 400 })
@@ -77,8 +78,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
       if (!raw) return Response.json({ message: "Community not found" }, { status: 404 })
       const expectedRaw = typeof raw === "string" ? raw : JSON.stringify(raw)
       const community = decode<any>(raw)
-      const isMember = (community.memberIds || []).includes(userId)
-      const isAdmin = (community.adminIds || [community.ownerId]).includes(userId)
+      const isMember = (community.memberIds || []).includes(userId) || isSuperAdmin
+      const isAdmin = (community.adminIds || [community.ownerId]).includes(userId) || isSuperAdmin
 
       if (action === "acceptInvite" || action === "declineInvite") {
         const invited = await db.sismember(`community:${communityId}:invites`, userId)
@@ -86,10 +87,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
       } else if (!isMember) {
         return Response.json({ message: "Not a community member" }, { status: 403 })
       }
-      if ((action === "promoteAdmin" || action === "demoteAdmin") && userId !== community.ownerId) {
+      if ((action === "promoteAdmin" || action === "demoteAdmin") && userId !== community.ownerId && !isSuperAdmin) {
         return Response.json({ message: "Only the community owner can change admin roles" }, { status: 403 })
       }
-      if (action === "delete" && userId !== community.ownerId) {
+      if (action === "delete" && userId !== community.ownerId && !isSuperAdmin) {
         return Response.json({ message: "Only the community owner can delete it" }, { status: 403 })
       }
       if (action !== "leave" && action !== "delete" && action !== "acceptInvite" && action !== "declineInvite" && !isAdmin) {
