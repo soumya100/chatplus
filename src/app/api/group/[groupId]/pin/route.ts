@@ -43,6 +43,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
   try {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
+    const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
     if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
     let body: unknown
     try {
@@ -56,8 +57,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
     const rawGroup = await db.get(`group:${groupId}`)
     if (!rawGroup) return Response.json({ message: "Group not found" }, { status: 404 })
     const group = (typeof rawGroup === "string" ? JSON.parse(rawGroup) : rawGroup) as Group
-    if (!(await hasCurrentChatAccess(db, `group--${groupId}`, userId))) return Response.json({ message: "Not a group member" }, { status: 403 })
-    const isAdmin = resolveAdminIds(group).includes(userId)
+    if (!isSuperAdmin && !(await hasCurrentChatAccess(db, `group--${groupId}`, userId))) return Response.json({ message: "Not a group member" }, { status: 403 })
+    const isAdmin = resolveAdminIds(group).includes(userId) || isSuperAdmin
     if (group.settings?.onlyAdminsCanPinMessages && !isAdmin) return Response.json({ message: "Only admins can pin messages" }, { status: 403 })
 
     const key = `chat:group--${groupId}:messages`
@@ -83,7 +84,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ groupId
     const rawGroup = await db.get(`group:${groupId}`)
     if (!rawGroup) return Response.json({ message: "Group not found" }, { status: 404 })
     const group = (typeof rawGroup === "string" ? JSON.parse(rawGroup) : rawGroup) as Group
-    if (!(await hasCurrentChatAccess(db, `group--${groupId}`, userId))) return Response.json({ message: "Not a group member" }, { status: 403 })
+    if (!session.user.isSuperAdmin && !(await hasCurrentChatAccess(db, `group--${groupId}`, userId))) return Response.json({ message: "Not a group member" }, { status: 403 })
     const rows = await db.zrange(`chat:group--${groupId}:messages`, 0, -1) as unknown[]
     const messages: Message[] = []
     for (const row of rows) {
