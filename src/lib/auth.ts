@@ -54,6 +54,10 @@ const providers: NextAuthOptions["providers"] = [
             }
 
             const dbUser = (typeof rawUser === "string" ? JSON.parse(rawUser) : rawUser) as User
+            if ((dbUser as any).suspendedAt) {
+                await bcrypt.compare(password, DUMMY_BCRYPT_HASH)
+                throw new Error(genericError)
+            }
 
             // If account was created via OAuth without a local password
             if (!dbUser.password) {
@@ -135,6 +139,12 @@ export const authOptions: NextAuthOptions = {
             }
 
             const dbUser = (typeof dbUserResult === "string" ? JSON.parse(dbUserResult) : dbUserResult) as User
+            if ((dbUser as any)?.suspendedAt) {
+                return { ...token, id: "", exp: 0 }
+            }
+            if ((dbUser as any)?.passwordChangedAt && (!token.iat || token.iat * 1000 < Number((dbUser as any).passwordChangedAt))) {
+                return { ...token, id: "", exp: 0 }
+            }
             if (!dbUser?.id || dbUser.id !== token.id) {
                 return { ...token, id: "", exp: 0 }
             }
