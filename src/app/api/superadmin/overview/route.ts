@@ -27,6 +27,7 @@ export async function GET(req: Request) {
     const pipeline = db.pipeline()
     ids.forEach(id => pipeline.get(`user:${id}`))
     const rows = ids.length ? await pipeline.exec() : []
+    const suspendedUsers = rows.filter(raw => { try { const value = typeof raw === "string" ? JSON.parse(raw) : raw; return Boolean(value?.suspendedAt) } catch { return false } }).length
     const users = rows.flatMap((raw, index) => {
       try {
         const value = typeof raw === "string" ? JSON.parse(raw) : raw
@@ -46,22 +47,33 @@ export async function GET(req: Request) {
     }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
 
     const communityIds = await db.smembers("communities") as string[]
-    const groupIds = new Set<string>()
+    const groupIds = new Set<string>((await db.smembers("groups") as string[]) || [])
     const groupIndexPipeline = db.pipeline()
     ids.forEach(id => groupIndexPipeline.smembers(`user:${id}:groups`))
     const groupIndexes = ids.length ? await groupIndexPipeline.exec() : []
     for (const value of groupIndexes) {
       if (Array.isArray(value)) value.forEach(id => groupIds.add(String(id)))
     }
+    const allGroupIds = Array.from(groupIds)
+    const groupPipeline = db.pipeline()
+    allGroupIds.forEach(id => groupPipeline.get(`group:${id}`))
+    const groupRows = allGroupIds.length ? await groupPipeline.exec() : []
+    const groups = groupRows.flatMap((raw, index) => { try { const group = typeof raw === "string" ? JSON.parse(raw) : raw; return group?.id === allGroupIds[index] ? [{ id: group.id, name: group.name || "Untitled group", memberCount: (group.memberIds || []).length, communityId: group.communityId || null }] : [] } catch { return [] } })
+    const communityPipeline = db.pipeline()
+    ;(communityIds || []).forEach(id => communityPipeline.get(`community:${id}`))
+    const communityRows = communityIds?.length ? await communityPipeline.exec() : []
+    const communities = communityRows.flatMap((raw, index) => { try { const community = typeof raw === "string" ? JSON.parse(raw) : raw; return community?.id === communityIds[index] ? [{ id: community.id, name: community.name || "Untitled community", memberCount: (community.memberIds || []).length, groupCount: (community.groupIds || []).length }] : [] } catch { return [] } })
 
     return Response.json({
       stats: {
         users: ids.length,
         groups: groupIds.size,
         communities: (communityIds || []).length,
-        suspendedUsers: users.filter(user => user.suspendedAt).length,
+        suspendedUsers,
       },
       users: users.slice(offset, offset + limit),
+      groups: groups.slice(0, 100),
+      communities: communities.slice(0, 100),
       pagination: { offset, limit, total: users.length },
     })
   } catch (error) {
