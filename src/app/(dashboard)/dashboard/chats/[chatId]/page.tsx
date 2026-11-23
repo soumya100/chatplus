@@ -79,11 +79,18 @@ const page = async ({ params }: PageProps) => {
     const group = (typeof groupRaw === 'string' ? JSON.parse(groupRaw) : groupRaw) as Group
 
     const initialMessages = await getChatMessages(chatId)
+    // Present platform admins as an admin/member in the viewer-only client model;
+    // server APIs still independently authorize every action from the allowlist.
+    const visibleGroup = user.isSuperAdmin ? {
+      ...group,
+      memberIds: Array.from(new Set([...(group.memberIds || []), user.id])),
+      adminIds: Array.from(new Set([...(group.adminIds || [group.creatorId]), user.id])),
+    } : group
 
     const groupVirtualPartner: User = {
       id: `group--${group.id}`,
       name: group.name,
-      email: `${group.memberIds.length} members in group`,
+      email: `${visibleGroup.memberIds.length} members in group`,
       image: group.image || generateInitialsAvatar(group.name, '#8b5cf6', '#ec4899')
     }
 
@@ -94,7 +101,7 @@ const page = async ({ params }: PageProps) => {
         initialMessages={initialMessages}
         sessionId={session.user.id}
         sessionImg={session.user.image || ''}
-        initialGroup={group}
+        initialGroup={visibleGroup}
       />
     )
   }
