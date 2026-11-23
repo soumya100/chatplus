@@ -22,14 +22,21 @@ export async function POST(req: Request) {
     const existing = await fetchRedis("get", `user:email:${email}`)
     if (existing) return json({ message: "An account with this email already exists. Please sign in instead." }, 409)
 
+    const emailKey = createHash("sha256").update(email).digest("hex")
+    const cooldownKey = `signup:otp-cooldown:${emailKey}`
+    const cooldown = await db.set(cooldownKey, "1", { nx: true, ex: 60 })
+    if (!cooldown) return json({ message: "A code was sent recently. Please wait before requesting another." }, 429)
+
     const apiKey = process.env.RESEND_API_KEY
     const from = process.env.EMAIL_FROM
-    if (!apiKey || !from) return json({ message: "Email verification is not configured yet. Please contact the administrator." }, 503)
+    if (!apiKey || !from) {
+      await db.del(cooldownKey)
+      return json({ message: "Email verification is not configured yet. Please contact the administrator." }, 503)
+    }
 
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0")
     const codeHash = createHash("sha256").update(`${email}:${code}:${process.env.NEXTAUTH_SECRET || ""}`).digest("hex")
-    await db.set(`signup:otp:${email}`, JSON.stringify({ hash: codeHash, attempts: 0, createdAt: Date.now() }), { ex: 600 })
-    await db.del(`signup:verified:${email}`)
+
 
     const sent = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -42,9 +49,11 @@ export async function POST(req: Request) {
       }),
     })
     if (!sent.ok) {
-      await db.del(`signup:otp:${email}`)
+      await db.del(cooldownKey)
       return json({ message: "We couldn't send the verification email. Please try again shortly." }, 502)
     }
+    await db.set(`signup:otp:${emailKey}`, JSON.stringify({ hash: codeHash, attempts: 0, createdAt: Date.now() }), { ex: 600 })
+    await db.del(`signup:verified:${emailKey}`)
     return json({ success: true, message: "Verification code sent. Check your inbox and spam folder." })
   } catch (error) {
     console.error("[email-otp] send failed", error)
