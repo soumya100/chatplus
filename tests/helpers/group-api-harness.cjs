@@ -662,6 +662,12 @@ const db = {
       }
       const deleteGroup = args[7] === "true";
       if (deleteGroup) {
+        if (args[10] === "true") {
+          const communityKey = keys[keys.length - 2];
+          const currentCommunity = readRaw(communityKey);
+          if (!currentCommunity || currentCommunity !== args[8]) return 0;
+          writeRaw(communityKey, args[9]);
+        }
         groups.delete(groupId);
         srem("groups", groupId);
         features.delete(groupId);
