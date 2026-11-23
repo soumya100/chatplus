@@ -64,6 +64,7 @@ async function main() {
     ["community group creation", "/api/community/smoke-community/groups", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Smoke group", memberIds: [] }) }],
     ["users search", "/api/users/search?q=smoke", { method: "GET" }],
     ["SuperAdmin access boundary", "/api/superadmin/overview", { method: "GET" }],
+    ["SuperAdmin audit boundary", "/api/superadmin/audit", { method: "GET" }],
     ["avatar update", "/api/user/avatar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: "https://smoke.example.test/a.png" }) }],
     ["pusher channel auth", "/api/pusher/auth", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ socket_id: "smoke-socket", channel_name: "private-user__smoke" }) }],
     ["upload token", "/api/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "blob.generate-client-token", payload: { pathname: "smoke.png", callbackUrl: "http://127.0.0.1:3100/api/upload" } }) }],
@@ -71,7 +72,7 @@ async function main() {
   ];
 
   for (const [name, path, options] of protectedRequests) {
-    await check(name, path, options, name === "SuperAdmin access boundary" ? 404 : 401);
+    await check(name, path, options, name === "SuperAdmin access boundary" || name === "SuperAdmin audit boundary" ? 404 : 401);
   }
 
   const resetRequest = await check("password reset request privacy", "/api/auth/password-reset/request", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "nonexistent-smoke@example.test" }) }, 200);
