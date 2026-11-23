@@ -14,6 +14,10 @@ async function main() {
 
   const signup = await check("signup page", "/signup", {}, 200);
   assert.match(signup.headers.get("content-type") || "", /text\/html/);
+  const forgotPassword = await check("forgot password page", "/forgot-password", {}, 200);
+  assert.match(forgotPassword.headers.get("content-type") || "", /text\/html/);
+  const resetPassword = await check("reset password page", "/reset-password?token=invalid&email=smoke%40example.test", {}, 200);
+  assert.match(resetPassword.headers.get("content-type") || "", /text\/html/);
 
   const dashboard = await fetch(`${baseUrl}/dashboard`, { redirect: "manual" });
   assert.ok([302, 303, 307, 308].includes(dashboard.status), "unauthenticated dashboard access must redirect");
@@ -54,9 +58,11 @@ async function main() {
     ["friend deny", "/api/friends/deny", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: "smoke-user" }) }],
     ["friend list", "/api/friends/list", { method: "GET" }],
     ["community list", "/api/community", { method: "GET" }],
+    ["community announcement access", "/api/community/smoke-community/announcements", { method: "GET" }],
     ["community create", "/api/community", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Smoke community" }) }],
     ["community mutation", "/api/community/smoke-community", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "leave" }) }],
     ["users search", "/api/users/search?q=smoke", { method: "GET" }],
+    ["SuperAdmin access boundary", "/api/superadmin/overview", { method: "GET" }],
     ["avatar update", "/api/user/avatar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: "https://smoke.example.test/a.png" }) }],
     ["pusher channel auth", "/api/pusher/auth", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ socket_id: "smoke-socket", channel_name: "private-user__smoke" }) }],
     ["upload token", "/api/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "blob.generate-client-token", payload: { pathname: "smoke.png", callbackUrl: "http://127.0.0.1:3100/api/upload" } }) }],
@@ -64,10 +70,14 @@ async function main() {
   ];
 
   for (const [name, path, options] of protectedRequests) {
-    await check(name, path, options, 401);
+    await check(name, path, options, name === "SuperAdmin access boundary" ? 404 : 401);
   }
 
-  console.log(`Smoke checks passed: 4 public/auth checks, 1 middleware redirect, ${protectedRequests.length} protected API checks (including event creation, voting and RSVP).`);
+  const resetRequest = await check("password reset request privacy", "/api/auth/password-reset/request", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "nonexistent-smoke@example.test" }) }, 200);
+  assert.match((await resetRequest.json()).message || "", /If an account matches/);
+  await check("password reset confirmation rejects invalid token", "/api/auth/password-reset/confirm", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "smoke@example.test", token: "0".repeat(64), password: "StrongPass123!" }) }, 400);
+
+  console.log(`Smoke checks passed: 6 public/auth pages, 1 middleware redirect, ${protectedRequests.length} protected API checks plus password-reset privacy and token validation.`);
 }
 
 main().catch(error => {
