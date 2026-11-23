@@ -137,7 +137,7 @@ export async function PATCH(req: Request) {
         break
       }
     }
-    if (!moderatedUser) return Response.json({ message: "Account changed concurrently. Refresh and retry." }, { status: 409)
+    if (!moderatedUser) return Response.json({ message: "Account changed concurrently. Refresh and retry." }, { status: 409 })
 
     return Response.json({ success: true, action, user: { id: userId, suspendedAt: moderatedUser.suspendedAt || null } })
   } catch (error) {
