@@ -46,3 +46,4 @@ export default function ResetPasswordForm({ token, email }: { token: string; ema
       <Link href="/forgot-password" className="mt-6 block text-center text-sm font-medium text-indigo-300 hover:text-indigo-200">Request another reset link</Link>
     </div>
   </main>
+}
