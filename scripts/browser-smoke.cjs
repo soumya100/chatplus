@@ -169,18 +169,37 @@ async function exerciseBrowser(name, browserType) {
   const { page, close } = await launchSmokeContext(browserType, name);
   const pageErrors = [];
   const failedRequests = [];
+  const requestFrameUrls = new WeakMap();
   page.on("pageerror", error => pageErrors.push(error.message));
+  page.on("request", request => {
+    if (request.resourceType() !== "script") return;
+    try {
+      requestFrameUrls.set(request, request.frame().url());
+    } catch {
+      // Detached frames are still checked as failed requests below.
+    }
+  });
   page.on("requestfailed", request => {
     const errorText = request.failure()?.errorText || "failed";
     const requestUrl = request.url();
-    // Next.js may cancel an in-flight React Server Components (_rsc) fetch
-    // when a later navigation supersedes it. Chromium reports that expected
-    // cancellation as net::ERR_ABORTED; it is not a failed server request.
-    // Keep every other failed request visible to the smoke-test assertion.
+    let supersededByNavigation = false;
+    const startedOnUrl = requestFrameUrls.get(request);
+    if (startedOnUrl) {
+      try {
+        supersededByNavigation = request.frame().url() !== startedOnUrl;
+      } catch {
+        supersededByNavigation = true;
+      }
+    }
+    // Next.js may cancel an in-flight RSC fetch or a script chunk belonging
+    // to the previous document when a later navigation supersedes it.
+    // Ignore only those GET cancellations; failed resources on the current
+    // page and every other network error remain visible to the assertion.
     const expectedNavigationAbort =
       errorText === "net::ERR_ABORTED" &&
       request.method() === "GET" &&
-      new URL(requestUrl).searchParams.has("_rsc");
+      (new URL(requestUrl).searchParams.has("_rsc") ||
+        (request.resourceType() === "script" && supersededByNavigation));
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
