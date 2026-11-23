@@ -203,6 +203,12 @@ async function exerciseBrowser(name, browserType) {
     await togglePasswordVisibility(page, passwordSelector, true, name);
     await togglePasswordVisibility(page, passwordSelector, false, name);
 
+    await page.goto(`${baseUrl}/forgot-password`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: /forgot your password/i }).waitFor();
+    await page.locator("#reset-request-email").waitFor({ state: "visible" });
+    await page.goto(`${baseUrl}/reset-password?token=invalid&email=smoke%40example.test`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: /choose a new password/i }).waitFor();
+
     const loginWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(loginWidth <= 391, `${name}: login page overflows mobile viewport: ${loginWidth}px`);
 
