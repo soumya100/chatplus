@@ -53,6 +53,8 @@ const Signup: FC<SignupProps> = () => {
     function handleEmailChange(value: string) {
         setEmail(value)
         setEmailVerified(false)
+        setOtpOpen(false)
+        setResendSeconds(0)
         setOtp('')
         setOtpMessage(null)
         setErrorMessage(null)
@@ -86,6 +88,7 @@ const Signup: FC<SignupProps> = () => {
     }
 
     async function verifyEmailOtp(value = otp) {
+        if (otpBusy) return
         if (!/^\\d{6}$/.test(value)) {
             setOtpMessage('Enter all 6 digits.')
             return
@@ -322,9 +325,9 @@ const Signup: FC<SignupProps> = () => {
                                 <span className={emailVerified ? "inline-flex items-center gap-1.5 text-xs text-emerald-400" : "text-[11px] text-slate-500"}>
                                     {emailVerified ? <><CheckCircle2 className="h-3.5 w-3.5" /> Email verified</> : "Verify your email to continue"}
                                 </span>
-                                <button type="button" onClick={sendEmailOtp} disabled={otpBusy || emailVerified || !email.trim()} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-50">
+                                <button type="button" onClick={sendEmailOtp} disabled={otpBusy || emailVerified || resendSeconds > 0 || !email.trim()} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-50">
                                     {otpBusy && !otpOpen ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
-                                    {emailVerified ? "Verified" : "Send OTP"}
+                                    {emailVerified ? "Verified" : resendSeconds > 0 ? "Code sent" : "Send OTP"}
                                 </button>
                             </div>
                         </div>
