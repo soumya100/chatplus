@@ -61,6 +61,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
     const allowedMembers = new Set(community.memberIds || [])
     if (selectedMembers.some(id => !allowedMembers.has(id))) return Response.json({ message: "Every selected person must already belong to this community" }, { status: 400 })
 
+    const communityMemberIds = Array.from(new Set([...(community.memberIds || []), userId]))
+    if (communityMemberIds.length > 2000) return Response.json({ message: "This community has reached its 2,000 member limit" }, { status: 400 })
     const memberIds = Array.from(new Set([userId, ...selectedMembers]))
     if (memberIds.length > 255) return Response.json({ message: "A group can contain up to 255 members" }, { status: 400 })
     const groupId = nanoid(10)
@@ -87,7 +89,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
     const nextCommunity = {
       ...community,
       groupIds: [...(community.groupIds || []), groupId],
-      memberIds: Array.from(new Set([...(community.memberIds || []), userId])),
+      memberIds: communityMemberIds,
       updatedAt: now,
     }
     const keys = [
