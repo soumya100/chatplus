@@ -430,3 +430,24 @@ test("Redis Lua integration: deleting the last member unlinks its group from the
   assert.equal(await redis(["SISMEMBER", globalGroupsKey, "g1"]), "0");
   assert.equal(await redis(["SISMEMBER", actorGroupsKey, "g1"]), "0");
 });
+
+test("Redis Lua integration: issuing a new password reset invalidates the previous token atomically", { skip: !enabled }, async () => {
+  const issue = lua("src/app/api/auth/password-reset/request/route.ts", "issueResetToken");
+  const cleanup = lua("src/app/api/auth/password-reset/request/route.ts", "cleanupResetToken");
+  await redis(["FLUSHDB"]);
+  const previousKey = "password-reset:previous-hash";
+  const latestKey = "password-reset:user:u1";
+  const nextKey = "password-reset:next-hash";
+  await redis(["SET", previousKey, "previous-record", "EX", "1800"]);
+  await redis(["SET", latestKey, "previous-hash", "EX", "1800"]);
+
+  const issued = await evalLua(issue, [nextKey, latestKey], ['{"userId":"u1"}', "1800", "next-hash"]);
+  assert.equal(issued, "1");
+  assert.equal(await redis(["EXISTS", previousKey]), "0");
+  assert.equal(await redis(["GET", nextKey]), '{"userId":"u1"}');
+  assert.equal(await redis(["GET", latestKey]), "next-hash");
+
+  const staleCleanup = await evalLua(cleanup, [previousKey, latestKey], ["previous-hash"]);
+  assert.equal(staleCleanup, "0", "failed delivery for an older request must not erase a newer token");
+  assert.equal(await redis(["GET", latestKey]), "next-hash");
+});
