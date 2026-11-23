@@ -60,7 +60,7 @@ export default function SuperAdminDashboard() {
 
   return <main className="mx-auto max-w-7xl space-y-7 p-4 sm:p-7">
     <header className="flex flex-wrap items-center justify-between gap-4">
-      <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-300"><ShieldCheck size={15}/> System administration</div><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">SuperAdmin control center</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Platform-wide visibility and account governance. Every privileged action is authorized server-side and audit logged.</p></div>
+      <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-300"><ShieldCheck size={15}/> System administration</div><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">SuperAdmin control center</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Platform-wide visibility, group and community moderation, and account governance. Access is enforced server-side; account suspension and restoration are audit logged.</p></div>
       <button type="button" onClick={() => void load(query, offset)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><RefreshCw size={15} className={loading ? "animate-spin" : ""}/> Refresh</button>
     </header>
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
