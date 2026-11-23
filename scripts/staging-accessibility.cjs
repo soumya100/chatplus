@@ -59,6 +59,12 @@ async function main() {
       await audit(page, "Community announcements (mobile)");
       await page.getByRole("button", { name: "Groups" }).click();
       await audit(page, "Community groups (mobile)");
+      const createGroupButton = page.getByRole("button", { name: "Create group", exact: true }).first();
+      if (await createGroupButton.count()) {
+        await createGroupButton.click();
+        await audit(page, "Community create-group form (mobile)");
+        await page.getByRole("button", { name: "Cancel" }).click();
+      }
       await page.getByRole("button", { name: "Members" }).click();
       await audit(page, "Community members (mobile)");
     }
