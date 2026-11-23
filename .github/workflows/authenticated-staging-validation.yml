@@ -31,6 +31,7 @@ jobs:
       CHATAPP_STAGING_URL: ${{ vars.CHATAPP_STAGING_URL }}
       CHATAPP_STAGING_CONFIRMATION: ${{ inputs.confirm_staging }}
       CHATAPP_TEST_GROUP_ID: ${{ vars.CHATAPP_TEST_GROUP_ID }}
+      CHATAPP_TEST_COMMUNITY_ID: ${{ vars.CHATAPP_TEST_COMMUNITY_ID }}
       CHATAPP_TEST_ADMIN_EMAIL: ${{ secrets.CHATAPP_TEST_ADMIN_EMAIL }}
       CHATAPP_TEST_ADMIN_PASSWORD: ${{ secrets.CHATAPP_TEST_ADMIN_PASSWORD }}
       CHATAPP_TEST_MEMBER_EMAIL: ${{ secrets.CHATAPP_TEST_MEMBER_EMAIL }}
@@ -56,6 +57,7 @@ jobs:
           set -euo pipefail
           test -n "$CHATAPP_STAGING_URL"
           test -n "$CHATAPP_TEST_GROUP_ID"
+          test -n "$CHATAPP_TEST_COMMUNITY_ID"
           test -n "$CHATAPP_TEST_ADMIN_EMAIL"
           test -n "$CHATAPP_TEST_ADMIN_PASSWORD"
           test -n "$CHATAPP_TEST_MEMBER_EMAIL"
