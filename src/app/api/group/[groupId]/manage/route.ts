@@ -77,6 +77,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
     try {
         const session = await getServerSession(authOptions)
         const actorId = session?.user?.id
+        const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
         if (!actorId) return Response.json({ message: "Unauthorized" }, { status: 401 })
 
         let body: unknown
@@ -104,8 +105,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
             const group = decode<Group>(raw)
             const memberIds = group.memberIds || []
             const adminIds = resolveAdminIds(group)
-            const isMember = memberIds.includes(actorId)
-            const isAdmin = adminIds.includes(actorId)
+            const isMember = memberIds.includes(actorId) || isSuperAdmin
+            const isAdmin = adminIds.includes(actorId) || isSuperAdmin
             if (!isMember) return Response.json({ message: "You are not a member of this group" }, { status: 403 })
 
             let updatedGroup: Group = { ...group }
@@ -166,7 +167,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
                 }
                 if (!isAdmin) return Response.json({ message: "Only admins can manage members" }, { status: 403 })
                 if (action === "promote" || action === "demote") {
-                    if (actorId !== group.creatorId) {
+                    if (actorId !== group.creatorId && !isSuperAdmin) {
                         return Response.json({ message: "Only the group creator can change admin roles" }, { status: 403 })
                     }
                     if (targetId === group.creatorId) {
