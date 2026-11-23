@@ -578,7 +578,7 @@ if (script.includes("issue-password-reset-token-v1")) {
       if (index < 0) return JSON.stringify({ error: "Message not found" });
       const message = parse(rows[index].member);
       if (message.senderId === "system" || message.isDeleted) return JSON.stringify({ error: "Message cannot be edited" });
-      if (message.senderId !== args[1]) return JSON.stringify({ error: "Forbidden" });
+      if (message.senderId !== args[1] && args[3] !== "true") return JSON.stringify({ error: "Forbidden" });
       if (!message.mediaUrl && args[2].trim().length === 0) return JSON.stringify({ error: "Message text cannot be empty" });
       message.text = args[2];
       message.isEdited = true;
