@@ -13,6 +13,7 @@ interface DashBoardLayoutIndexProps {
   unseenFriendRequests: number,
   friends: User[],
   initialUnreadCounts?: Record<string, number>
+  isSuperAdmin?: boolean
 }
 
 const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({ 
