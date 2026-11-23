@@ -32,6 +32,9 @@ test("password reset: sends a one-time link and atomically changes the password"
     const resetUrl = new URL(link);
     const token = resetUrl.searchParams.get("token");
     assert.match(token, /^[a-f0-9]{64}$/);
+    const tokenHash = require("crypto").createHash("sha256").update(token).digest("hex");
+    assert.ok(h.getKv("password-reset:" + tokenHash), "only the token hash is stored");
+    assert.equal(h.getKv("password-reset:" + token), null, "raw reset token is never stored");
     assert.equal(resetUrl.origin, "https://chatplus.example.test");
 
     const changed = await status(await confirmReset.POST(h.request({
@@ -42,6 +45,9 @@ test("password reset: sends a one-time link and atomically changes the password"
     assert.ok(updated.passwordChangedAt > 0);
     assert.ok(await bcrypt.compare("NewPass456!", updated.password));
     assert.ok(!(await bcrypt.compare("OldPass123!", updated.password)));
+
+    const emailMismatch = await status(await confirmReset.POST(h.request({ email: "someone-else@example.test", token, password: "NewPass456!" })));
+    assert.equal(emailMismatch.status, 400);
 
     const replay = await status(await confirmReset.POST(h.request({
       email: "reset@example.test", token, password: "OtherPass789!",
