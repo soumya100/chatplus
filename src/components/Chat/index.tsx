@@ -370,9 +370,9 @@ const Chat: FC<ChatProps> = ({
   }
 
   return (
-    <div className='flex flex-1 justify-between flex-col h-full max-h-[calc(100vh-6rem)]'>
+    <div className='flex min-h-0 min-w-0 flex-1 flex-col h-full max-h-full overflow-hidden'>
       {/* Header */}
-      <div className='flex sm:items-center justify-between py-3 border-b-2 border-gray-200 dark:border-zinc-800 px-5 bg-white dark:bg-zinc-900'>
+      <div className='flex shrink-0 sm:items-center justify-between py-3 border-b border-gray-200 dark:border-zinc-800 px-5 bg-white dark:bg-zinc-900'>
         <div className='relative flex items-center space-x-4'>
           <div className='relative'>
             <div className='relative w-9 sm:w-12 h-9 sm:h-12'>
@@ -493,6 +493,7 @@ const Chat: FC<ChatProps> = ({
         </div>
       )}
 
+      <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
       <Messages
         initialMessages={initialMessages}
         sessionId={sessionId}
@@ -508,6 +509,7 @@ const Chat: FC<ChatProps> = ({
           if (msg.senderId !== 'system') setReplyingTo(msg)
         }}
       />
+      </div>
       <ChatInput
         chatPartner={chatPartner.name}
         chatId={chatId}
