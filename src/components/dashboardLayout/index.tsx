@@ -73,7 +73,7 @@ const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({
         initialUnreadCounts={initialUnreadCounts}
         onOpenAvatarModal={handleOpenAvatarModal}
       />
-      <aside className='h-full min-h-0 min-w-0 max-w-7xl mx-auto box-border px-4 sm:px-6 lg:px-8 py-4 md:py-4 w-full overflow-y-auto overscroll-contain bg-gray-50/50 dark:bg-zinc-950'>
+      <aside className='h-full min-h-0 min-w-0 flex-1 max-w-7xl mx-auto box-border px-4 sm:px-6 lg:px-8 py-4 md:py-4 w-full overflow-y-auto overscroll-contain bg-gray-50/50 dark:bg-zinc-950'>
         {children}
       </aside>
 
