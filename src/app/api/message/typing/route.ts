@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
         if (chatId.startsWith("group--")) {
             const groupId = chatId.slice("group--".length)
-            if (!groupId || !(await db.sismember(`group:${groupId}:members`, userId))) {
+            if (!groupId || (!(await db.sismember(`group:${groupId}:members`, userId)) && !session.user.isSuperAdmin)) {
                 return new Response("Forbidden", { status: 403 })
             }
         } else {
