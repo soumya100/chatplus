@@ -302,7 +302,7 @@ test("chat viewport owns message scrolling and keeps composer outside the scroll
   const input = read("src/components/Chat/ChatInput.tsx");
 
   assert.match(layout, /h-\[100dvh\].*overflow-hidden/);
-  assert.match(layout, /h-full min-h-0 min-w-0.*overflow-hidden/);
+  assert.match(layout, /h-full min-h-0 min-w-0.*overflow-y-auto overscroll-contain/);
   assert.match(chat, /min-h-0 min-w-0 flex-1 flex-col h-full max-h-full overflow-hidden/);
   assert.match(chat, /<div className='flex min-h-0 flex-1 flex-col overflow-hidden'>[\s\S]*<Messages[\s\S]*<\/div>[\s\S]*<ChatInput/);
   assert.match(messages, /overflow-y-auto overscroll-contain/);
