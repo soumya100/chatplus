@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 export default async function CommunitiesPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) redirect("/login")
-  const ids = await db.smembers(`user:${session.user.id}:groups`) as string[]
+  const ids = (session.user.isSuperAdmin ? await db.smembers("groups") : await db.smembers(`user:${session.user.id}:groups`)) as string[]
   const groups: Group[] = []
   if (ids?.length) {
     const pipeline = db.pipeline()
