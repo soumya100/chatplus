@@ -19,7 +19,7 @@ import { signIn } from 'next-auth/react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FC, FormEvent, useMemo, useState } from 'react'
+import { FC, FormEvent, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 
 interface SignupProps {}
@@ -37,6 +37,79 @@ const Signup: FC<SignupProps> = () => {
     const [isLoading, setIsLoading] = useState(false)
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
+    const [emailVerified, setEmailVerified] = useState(false)
+    const [otpOpen, setOtpOpen] = useState(false)
+    const [otp, setOtp] = useState('')
+    const [otpBusy, setOtpBusy] = useState(false)
+    const [otpMessage, setOtpMessage] = useState<string | null>(null)
+    const [resendSeconds, setResendSeconds] = useState(0)
+
+    useEffect(() => {
+        if (resendSeconds <= 0) return
+        const timer = window.setTimeout(() => setResendSeconds(value => Math.max(0, value - 1)), 1000)
+        return () => window.clearTimeout(timer)
+    }, [resendSeconds])
+
+    function handleEmailChange(value: string) {
+        setEmail(value)
+        setEmailVerified(false)
+        setOtp('')
+        setOtpMessage(null)
+        setErrorMessage(null)
+    }
+
+    async function sendEmailOtp() {
+        const normalizedEmail = email.trim().toLowerCase()
+        if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) {
+            setErrorMessage('Enter a valid email address before requesting a code.')
+            return
+        }
+        setOtpBusy(true)
+        setOtpMessage(null)
+        try {
+            const response = await fetch('/api/auth/email-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: normalizedEmail }),
+            })
+            const data = await response.json()
+            if (!response.ok) throw new Error(data.message || 'Unable to send verification code.')
+            setOtp('')
+            setOtpOpen(true)
+            setResendSeconds(60)
+            setOtpMessage(data.message || 'Code sent. Check your inbox and spam folder.')
+        } catch (error: any) {
+            setErrorMessage(error.message || 'Unable to send verification code.')
+        } finally {
+            setOtpBusy(false)
+        }
+    }
+
+    async function verifyEmailOtp(value = otp) {
+        if (!/^\\d{6}$/.test(value)) {
+            setOtpMessage('Enter all 6 digits.')
+            return
+        }
+        setOtpBusy(true)
+        setOtpMessage(null)
+        try {
+            const response = await fetch('/api/auth/email-otp/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email.trim().toLowerCase(), code: value }),
+            })
+            const data = await response.json()
+            if (!response.ok) throw new Error(data.message || 'Verification failed.')
+            setEmailVerified(true)
+            setOtpOpen(false)
+            setOtpMessage(null)
+            toast.success('Email address verified.')
+        } catch (error: any) {
+            setOtpMessage(error.message || 'Verification failed.')
+        } finally {
+            setOtpBusy(false)
+        }
+    }
 
     // Password criteria assessment for VAPT compliance & real-time strength meter
     const passwordChecks = useMemo(() => {
@@ -72,6 +145,11 @@ const Signup: FC<SignupProps> = () => {
 
         if (!name.trim()) {
             setErrorMessage('Please enter your full name.')
+            return
+        }
+
+        if (!emailVerified) {
+            setErrorMessage('Please verify your email address using the OTP before creating your account.')
             return
         }
 
@@ -235,10 +313,19 @@ const Signup: FC<SignupProps> = () => {
                                     required
                                     autoComplete="email"
                                     value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    onChange={(e) => handleEmailChange(e.target.value)}
                                     placeholder="name@example.com"
                                     className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition duration-150"
                                 />
+                            </div>
+                            <div className="flex items-center justify-between gap-3 pt-1">
+                                <span className={emailVerified ? "inline-flex items-center gap-1.5 text-xs text-emerald-400" : "text-[11px] text-slate-500"}>
+                                    {emailVerified ? <><CheckCircle2 className="h-3.5 w-3.5" /> Email verified</> : "Verify your email to continue"}
+                                </span>
+                                <button type="button" onClick={sendEmailOtp} disabled={otpBusy || emailVerified || !email.trim()} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-50">
+                                    {otpBusy && !otpOpen ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                                    {emailVerified ? "Verified" : "Send OTP"}
+                                </button>
                             </div>
                         </div>
 
@@ -356,7 +443,7 @@ const Signup: FC<SignupProps> = () => {
                         {/* Submit Button */}
                         <button
                             type="submit"
-                            disabled={isLoading || isGoogleLoading}
+                            disabled={isLoading || isGoogleLoading || !emailVerified}
                             className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-[0.98] shadow-lg shadow-indigo-600/25 disabled:opacity-60 disabled:cursor-not-allowed transition duration-150 cursor-pointer mt-2"
                         >
                             {isLoading ? (
@@ -369,6 +456,24 @@ const Signup: FC<SignupProps> = () => {
                             )}
                         </button>
                     </form>
+
+                    {otpOpen && (
+                        <div role="dialog" aria-modal="true" aria-labelledby="otp-title" className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
+                            <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+                                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300"><ShieldCheck className="h-5 w-5" /></div>
+                                <h2 id="otp-title" className="text-lg font-bold text-white">Verify your email</h2>
+                                <p className="mt-1 text-xs leading-5 text-slate-400">Enter the 6-digit code sent to <span className="font-semibold text-slate-200">{email.trim().toLowerCase()}</span>. It expires in 10 minutes.</p>
+                                <label htmlFor="signup-otp" className="mt-5 block text-xs font-medium text-slate-300">Verification code</label>
+                                <input id="signup-otp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={(event) => { const next = event.target.value.replace(/\\D/g, '').slice(0, 6); setOtp(next); if (next.length === 6) void verifyEmailOtp(next) }} onKeyDown={(event) => { if (event.key === 'Enter') void verifyEmailOtp() }} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" placeholder="000000" aria-describedby="otp-feedback" />
+                                {otpMessage && <p id="otp-feedback" role="status" className="mt-3 text-xs text-amber-300">{otpMessage}</p>}
+                                <div className="mt-5 flex items-center justify-between gap-3">
+                                    <button type="button" onClick={() => { setOtpOpen(false); setOtp('') }} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-400 hover:bg-slate-800">Cancel</button>
+                                    <button type="button" onClick={sendEmailOtp} disabled={otpBusy || resendSeconds > 0} className="text-xs font-semibold text-indigo-300 hover:text-indigo-200 disabled:text-slate-600">{resendSeconds > 0 ? "Resend in " + resendSeconds + "s" : "Resend code"}</button>
+                                    <button type="button" onClick={() => void verifyEmailOtp()} disabled={otpBusy || otp.length !== 6} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">{otpBusy ? "Verifying…" : "Verify"}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Divider */}
                     <div className="relative flex items-center justify-center">
