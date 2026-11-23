@@ -63,8 +63,12 @@ export async function POST(req: Request) {
             )
         }
 
+        const emailVerificationToken = typeof body?.emailVerificationToken === "string" ? body.emailVerificationToken : ""
+        if (!/^[a-f0-9]{64}$/.test(emailVerificationToken)) {
+            return new Response(JSON.stringify({ message: "Please verify your email address before creating an account." }), { status: 403, headers: { "Content-Type": "application/json" } })
+        }
         const emailKey = createHash("sha256").update(email).digest("hex")
-        const emailVerified = await db.get(`signup:verified:${emailKey}`)
+        const emailVerified = await db.get(`signup:verified:${emailKey}:${emailVerificationToken}`)
         if (emailVerified !== "1") {
             return new Response(JSON.stringify({ message: "Please verify your email address before creating an account." }), { status: 403, headers: { "Content-Type": "application/json" } })
         }
@@ -94,7 +98,7 @@ export async function POST(req: Request) {
         pipeline.set(`user:name:${name.toLowerCase().trim()}`, userId)
         pipeline.sadd('users', userId)
         await pipeline.exec()
-        await db.del(`signup:verified:${emailKey}`)
+        await db.del(`signup:verified:${emailKey}:${emailVerificationToken}`)
 
         // Return sanitized user object without sensitive fields
         return new Response(
