@@ -30,7 +30,7 @@ export async function GET() {
       if (value) byId.set(allIds[index], value)
     } catch {}
   })
-  const communities = (ids || []).flatMap(id => byId.has(id) ? [{ ...byId.get(id), isAdmin: isSuperAdmin || (byId.get(id).adminIds || [byId.get(id).ownerId]).includes(userId), isOwner: byId.get(id).ownerId === userId }] : [])
+  const communities = (ids || []).flatMap(id => byId.has(id) ? [{ ...byId.get(id), isAdmin: isSuperAdmin || (byId.get(id).adminIds || [byId.get(id).ownerId]).includes(userId), isOwner: byId.get(id).ownerId === userId, isSuperAdmin }] : [])
   const memberIds = Array.from(new Set(communities.flatMap(community => community.memberIds || [])))
   const memberPipeline = db.pipeline()
   memberIds.forEach(id => memberPipeline.get(`user:${id}`))
