@@ -61,6 +61,7 @@ async function main() {
     ["community announcement access", "/api/community/smoke-community/announcements", { method: "GET" }],
     ["community create", "/api/community", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Smoke community" }) }],
     ["community mutation", "/api/community/smoke-community", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "leave" }) }],
+    ["community group creation", "/api/community/smoke-community/groups", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Smoke group", memberIds: [] }) }],
     ["users search", "/api/users/search?q=smoke", { method: "GET" }],
     ["SuperAdmin access boundary", "/api/superadmin/overview", { method: "GET" }],
     ["avatar update", "/api/user/avatar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: "https://smoke.example.test/a.png" }) }],
