@@ -83,7 +83,7 @@ export async function GET() {
   })
   const enrichedCommunities = communities.map(community => ({
     ...community,
-    members: (community.memberIds || []).map(id => memberMap.get(id)).filter(Boolean),
+    members: (community.memberIds || []).map((id: string) => memberMap.get(id)).filter(Boolean),
   }))
   const invites = (inviteIds || []).flatMap(id => byId.has(id) ? [byId.get(id)] : [])
   return Response.json({ communities: enrichedCommunities, invites })
