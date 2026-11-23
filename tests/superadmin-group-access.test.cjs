@@ -4,6 +4,8 @@ const h = require("./helpers/group-api-harness.cjs");
 
 const groupManage = h.loadRoute("src/app/api/group/[groupId]/manage/route.ts");
 const groupMembers = h.loadRoute("src/app/api/group/[groupId]/members/route.ts");
+const groupFeatures = h.loadRoute("src/app/api/group/[groupId]/features/route.ts");
+const deleteMessage = h.loadRoute("src/app/api/message/delete/route.ts");
 const communities = h.loadRoute("src/app/api/community/route.ts");
 const status = async response => ({ status: response.status, data: await response.json() });
 
@@ -46,4 +48,36 @@ test("SuperAdmin can delete a community without being its owner", async () => {
   ));
   assert.equal(removed.status, 200);
   assert.equal(h.getSetMembers("communities").includes(id), false);
+});
+
+test("SuperAdmin can use group activity tools and moderate group messages but cannot inspect direct chats", async () => {
+  h.reset();
+  process.env.SUPERADMIN_EMAILS = "root@example.test";
+  h.setUser("root", { name: "Root", email: "root@example.test" });
+  h.setSession("root", "Root", { email: "root@example.test", isSuperAdmin: true });
+
+  const features = await status(await groupFeatures.POST(h.request({
+    action: "announce", text: "Platform moderation notice",
+  }), { params: Promise.resolve({ groupId: "g1" }) }));
+  assert.equal(features.status, 200);
+
+  h.setMessages([{
+    id: "moderation-target", senderId: "owner", receiverId: "group--g1",
+    text: "Abusive group message", timestamp: 123,
+  }], "g1");
+  const moderated = await status(await deleteMessage.POST(h.request({
+    messageId: "moderation-target", chatId: "group--g1",
+  })));
+  assert.equal(moderated.status, 200);
+  assert.equal(h.getMessages("g1")[0].isDeleted, true);
+  assert.equal(h.getMessages("g1")[0].text, "This message was deleted");
+
+  h.setDirectMessages([{
+    id: "private-message", senderId: "owner", receiverId: "member",
+    text: "Private conversation", timestamp: 124,
+  }], "owner", "member");
+  const privateAttempt = await status(await deleteMessage.POST(h.request({
+    messageId: "private-message", chatId: "owner--member",
+  })));
+  assert.equal(privateAttempt.status, 403, "SuperAdmin moderation never bypasses direct-chat privacy");
 });
