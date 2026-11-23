@@ -281,7 +281,7 @@ const Signup: FC<SignupProps> = () => {
 
                     {/* Error Alert */}
                     {errorMessage && (
-                        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-red-200 text-xs animate-in fade-in duration-200">
+                        <div role="alert" className="flex items-start gap-2.5 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-red-200 text-xs animate-in fade-in duration-200">
                             <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                             <span>{errorMessage}</span>
                         </div>
@@ -291,7 +291,7 @@ const Signup: FC<SignupProps> = () => {
                     <form onSubmit={handleSignup} className="space-y-4">
                         {/* Name */}
                         <div className="space-y-1.5">
-                            <label className="block text-xs font-medium text-slate-300">
+                            <label htmlFor="signup-name" className="block text-xs font-medium text-slate-300">
                                 Full Name
                             </label>
                             <div className="relative">
@@ -303,6 +303,7 @@ const Signup: FC<SignupProps> = () => {
                                     required
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
+                                    id="signup-name"
                                     placeholder="Your Name"
                                     className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition duration-150"
                                 />
@@ -311,7 +312,7 @@ const Signup: FC<SignupProps> = () => {
 
                         {/* Email */}
                         <div className="space-y-1.5">
-                            <label className="block text-xs font-medium text-slate-300">
+                            <label htmlFor="signup-email" className="block text-xs font-medium text-slate-300">
                                 Email Address
                             </label>
                             <div className="relative">
@@ -319,6 +320,7 @@ const Signup: FC<SignupProps> = () => {
                                     <Mail className="h-4 w-4" />
                                 </div>
                                 <input
+                                    id="signup-email"
                                     type="email"
                                     required
                                     autoComplete="email"
@@ -341,7 +343,7 @@ const Signup: FC<SignupProps> = () => {
 
                         {/* Password */}
                         <div className="space-y-1.5">
-                            <label className="block text-xs font-medium text-slate-300">
+                            <label htmlFor="signup-password" className="block text-xs font-medium text-slate-300">
                                 Password
                             </label>
                             <div className="relative">
@@ -349,6 +351,7 @@ const Signup: FC<SignupProps> = () => {
                                     <Lock className="h-4 w-4" />
                                 </div>
                                 <input
+                                    id="signup-password"
                                     type={showPassword ? 'text' : 'password'}
                                     required
                                     autoComplete="new-password"
@@ -415,7 +418,7 @@ const Signup: FC<SignupProps> = () => {
 
                         {/* Confirm Password */}
                         <div className="space-y-1.5">
-                            <label className="block text-xs font-medium text-slate-300">
+                            <label htmlFor="signup-confirm-password" className="block text-xs font-medium text-slate-300">
                                 Confirm Password
                             </label>
                             <div className="relative">
@@ -423,6 +426,7 @@ const Signup: FC<SignupProps> = () => {
                                     <Lock className="h-4 w-4" />
                                 </div>
                                 <input
+                                    id="signup-confirm-password"
                                     type={showConfirmPassword ? 'text' : 'password'}
                                     required
                                     autoComplete="new-password"
@@ -453,7 +457,7 @@ const Signup: FC<SignupProps> = () => {
                         {/* Submit Button */}
                         <button
                             type="submit"
-                            disabled={isLoading || isGoogleLoading || !emailVerified}
+                            disabled={isLoading || isGoogleLoading}
                             className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-[0.98] shadow-lg shadow-indigo-600/25 disabled:opacity-60 disabled:cursor-not-allowed transition duration-150 cursor-pointer mt-2"
                         >
                             {isLoading ? (
@@ -474,7 +478,8 @@ const Signup: FC<SignupProps> = () => {
                                 <h2 id="otp-title" className="text-lg font-bold text-white">Verify your email</h2>
                                 <p className="mt-1 text-xs leading-5 text-slate-400">Enter the 6-digit code sent to <span className="font-semibold text-slate-200">{email.trim().toLowerCase()}</span>. It expires in 10 minutes.</p>
                                 <label htmlFor="signup-otp" className="mt-5 block text-xs font-medium text-slate-300">Verification code</label>
-                                <input id="signup-otp" autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={(event) => { const next = event.target.value.replace(/\D/g, '').slice(0, 6); setOtp(next); if (next.length === 6) void verifyEmailOtp(next) }} onKeyDown={(event) => { if (event.key === 'Enter') void verifyEmailOtp() }} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" placeholder="000000" aria-describedby="otp-feedback" />
+                                <input id="signup-otp" autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={(event) => { const next = event.target.value.replace(/\D/g, '').slice(0, 6); setOtp(next); if (next.length === 6) void verifyEmailOtp(next) }} onKeyDown={(event) => { if (event.key === 'Enter') void verifyEmailOtp() }} aria-label="Six-digit email verification code"
+                                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" placeholder="000000" aria-describedby="otp-feedback" />
                                 {otpMessage && <p id="otp-feedback" role="status" className="mt-3 text-xs text-amber-300">{otpMessage}</p>}
                                 <div className="mt-5 flex items-center justify-between gap-3">
                                     <button type="button" onClick={() => { setOtpOpen(false); setOtp('') }} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-400 hover:bg-slate-800">Cancel</button>
