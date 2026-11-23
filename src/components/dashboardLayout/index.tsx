@@ -58,6 +58,7 @@ const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({
           handleModalStateOpen={handleModalStateOpen}
           openAddFriendModal={openAddFriendModal}
           initialUnreadCounts={initialUnreadCounts}
+          isSuperAdmin={isSuperAdmin}
           onOpenAvatarModal={handleOpenAvatarModal}
         />
       </div>
