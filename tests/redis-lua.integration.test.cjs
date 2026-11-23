@@ -394,3 +394,34 @@ test("Redis Lua integration: community group creation atomically updates communi
   assert.equal(stale, "0", "a stale community revision must not create a detached group");
   assert.equal(await redis(["EXISTS", "group:g2"]), "0");
 });
+
+
+test("Redis Lua integration: deleting the last member unlinks its group from the community in the same transaction", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/group/[groupId]/manage/route.ts", "atomicGroupMutation");
+  await redis(["FLUSHDB"]);
+  const groupKey = "group:g1";
+  const membersKey = "group:g1:members";
+  const actorGroupsKey = "user:owner:groups";
+  const messagesKey = "chat:group--g1:messages";
+  const featuresKey = "group:g1:features";
+  const communityKey = "community:c1";
+  const globalGroupsKey = "groups";
+  const group = JSON.stringify({ id: "g1", creatorId: "owner", memberIds: ["owner"], communityId: "c1" });
+  const community = JSON.stringify({ id: "c1", groupIds: ["g1"], memberIds: ["owner"] });
+  const updatedCommunity = JSON.stringify({ id: "c1", groupIds: [], memberIds: ["owner"] });
+  await redis(["SET", groupKey, group]);
+  await redis(["SADD", membersKey, "owner"]);
+  await redis(["SADD", actorGroupsKey, "g1"]);
+  await redis(["SADD", globalGroupsKey, "g1"]);
+  await redis(["SET", communityKey, community]);
+
+  const result = await evalLua(script, [groupKey, membersKey, actorGroupsKey, messagesKey, featuresKey, actorGroupsKey, communityKey, globalGroupsKey], [
+    group, "leave", "", "owner", "g1", JSON.stringify(["owner"]), "", "true",
+    community, updatedCommunity, "true",
+  ]);
+  assert.equal(result, "1");
+  assert.equal(await redis(["EXISTS", groupKey]), "0");
+  assert.equal(await redis(["GET", communityKey]), updatedCommunity);
+  assert.equal(await redis(["SISMEMBER", globalGroupsKey, "g1"]), "0");
+  assert.equal(await redis(["SISMEMBER", actorGroupsKey, "g1"]), "0");
+});
