@@ -4,14 +4,14 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import axios from "axios"
 import Link from "next/link"
 import toast from "react-hot-toast"
-import { Bell, Check, ChevronRight, CirclePlus, Crown, Layers3, LogOut, Megaphone, MoreHorizontal, Network, Plus, Search, Send, Settings2, Shield, ShieldCheck, Trash2, UserPlus, Users, X } from "lucide-react"
+import { Bell, Check, ChevronRight, CirclePlus, Layers3, LogOut, Megaphone, Network, Plus, Search, Send, Shield, Trash2, UserPlus, Users, X } from "lucide-react"
 
 type CommunityMember = { id: string; name: string; image?: string }
 type Announcement = { id: string; authorId: string; authorName: string; text: string; createdAt: number }
 type Community = {
   id: string; name: string; description?: string; groupIds: string[]; ownerId: string;
   memberIds: string[]; members?: CommunityMember[]; adminIds?: string[];
-  isAdmin?: boolean; isOwner?: boolean; isSuperAdmin?: boolean; isSuperAdmin?: boolean;
+  isAdmin?: boolean; isOwner?: boolean; isSuperAdmin?: boolean;
 }
 type Props = { groups: Group[]; sessionId: string }
 
@@ -129,7 +129,7 @@ export default function WhatsAppCommunities({ groups, sessionId }: Props) {
     if (saved) setGroupToAdd("")
   }
 
-  const confirm = async () => {
+  const performConfirmedAction = async () => {
     if (!selected || !confirmAction) return
     const action = confirmAction
     const saved = await mutate(selected, { action }, action === "delete" ? "Community deleted" : "You left the community")
@@ -190,6 +190,6 @@ export default function WhatsAppCommunities({ groups, sessionId }: Props) {
       </div>
     </section>
 
-    {confirmAction && selected && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-labelledby="community-action-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-900"><h2 id="community-action-title" className="text-base font-semibold text-slate-900 dark:text-white">{confirmAction === "delete" ? "Delete this community?" : "Leave this community?"}</h2><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{confirmAction === "delete" ? "The community and its announcements will be removed. Linked group chats and their message history will remain." : "You will leave this community. Your membership in its separate group chats will not be changed."}</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setConfirmAction(null)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-white/10 dark:text-slate-300">Cancel</button><button type="button" disabled={busy} onClick={() => void confirm()} className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{confirmAction === "delete" ? "Delete community" : "Leave community"}</button></div></section></div>}
+    {confirmAction && selected && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-labelledby="community-action-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-900"><h2 id="community-action-title" className="text-base font-semibold text-slate-900 dark:text-white">{confirmAction === "delete" ? "Delete this community?" : "Leave this community?"}</h2><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{confirmAction === "delete" ? "The community and its announcements will be removed. Linked group chats and their message history will remain." : "You will leave this community. Your membership in its separate group chats will not be changed."}</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setConfirmAction(null)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-white/10 dark:text-slate-300">Cancel</button><button type="button" disabled={busy} onClick={() => void performConfirmedAction()} className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{confirmAction === "delete" ? "Delete community" : "Leave community"}</button></div></section></div>}
   </main>
 }
