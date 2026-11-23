@@ -71,7 +71,8 @@ async function fillSignupField(page, selector, value, label) {
   const deadline = Date.now() + 30_000;
   let lastError = "";
   for (;;) {
-    await page.locator(selector).fill(value);
+    const field = page.locator(selector);
+    if (await field.inputValue() !== value) await field.fill(value);
     try {
       await page.waitForFunction(
         ([expr, expected]) => {
