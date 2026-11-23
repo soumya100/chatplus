@@ -72,7 +72,8 @@ test("SuperAdmin can use group activity tools and moderate group messages but ca
   }));
   const moderatedText = await moderatedResponse.text();
   assert.equal(moderatedResponse.status, 200, "group message moderation failed: " + moderatedText);
-  const moderated = { status: moderatedResponse.status, data: JSON.parse(moderatedText) };
+  const moderated = { status: moderatedResponse.status, body: moderatedText };
+  assert.equal(moderated.body, "OK");
   assert.equal(h.getMessages("g1")[0].isDeleted, true);
   assert.equal(h.getMessages("g1")[0].text, "This message was deleted");
 
