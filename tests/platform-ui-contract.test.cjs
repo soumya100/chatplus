@@ -13,6 +13,7 @@ test("SuperAdmin is configured only by a server-side email allowlist", () => {
   assert.match(route, /requireSuperAdmin/);
   assert.match(route, /Not found/);
   assert.match(route, /SuperAdmin accounts cannot be suspended/);
+  assert.match(route, /superadmin-user-moderation-cas-v1/);
   assert.match(page, /isSuperAdminEmail/);
 });
 
