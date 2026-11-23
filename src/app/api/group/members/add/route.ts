@@ -159,7 +159,11 @@ export async function POST(req: Request) {
                 const rawCommunity = await fetchRedis("get", `community:${communityId}`)
                 if (rawCommunity) {
                     const communityDoc = decode<{ memberIds?: string[]; updatedAt?: number } & Record<string, unknown>>(rawCommunity)
-                    communityDoc.memberIds = Array.from(new Set([...(communityDoc.memberIds || []), ...validMemberIds]))
+                    const communityMembers = Array.from(new Set([...(communityDoc.memberIds || []), ...validMemberIds]))
+                    if (communityMembers.length > 2000) {
+                        return Response.json({ message: "This community has reached its 2,000 member limit. Remove members or unlink a group before adding more." }, { status: 400 })
+                    }
+                    communityDoc.memberIds = communityMembers
                     communityDoc.updatedAt = Date.now()
                     community = {
                         key: `community:${communityId}`,
