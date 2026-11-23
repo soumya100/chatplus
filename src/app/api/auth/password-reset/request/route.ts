@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     const resetUrl = new URL("/reset-password", baseUrl)
     resetUrl.searchParams.set("token", token)
     resetUrl.searchParams.set("email", email)
-    const safeName = (user.name || "there").replace(/[<>]/g, "").slice(0, 80)
+    const safeName = (user.name || "there").slice(0, 80).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\x27/g, "&#x27;")
 
     const sent = await fetch("https://api.resend.com/emails", {
       method: "POST",
