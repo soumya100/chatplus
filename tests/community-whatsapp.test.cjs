@@ -32,7 +32,7 @@ test("community: only admins post announcements; members can read them", async (
 
   h.setSession("member");
   assert.equal((await postAnnouncement(id, { text: "Release notes" })).status, 403);
-  assert.equal((await status(await announcements.GET(new Request("http://localhost"), { params: Promise.resolve({ communityId: id }) }))).status, 403);
+  assert.equal((await status(await announcements.GET(new Request("http://localhost"), { params: Promise.resolve({ communityId: id }) }))).status, 200);
 
   h.setSession("owner");
   assert.equal((await postCommunity(id, { action: "promoteAdmin", memberId: "member" })).status, 200);
