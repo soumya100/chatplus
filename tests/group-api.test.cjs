@@ -631,3 +631,23 @@ test("member invitation gives up with 409 when the community document keeps chan
   assert.ok(!community.memberIds.includes("new-user"), "no partial community membership may be committed");
   assert.ok(h.getSetMembers("user:new-user:communities").size === 0 || !h.getSetMembers("user:new-user:communities").includes("c1"));
 });
+
+
+test("member addition compares the exact raw Redis document when the Redis client auto-deserializes GET", async () => {
+  h.reset();
+  const originalGet = h.db.get;
+  h.db.get = async key => {
+    const value = await originalGet(key);
+    if ((key.startsWith("group:") && !key.endsWith(":members")) || key.startsWith("community:")) {
+      return typeof value === "string" ? JSON.parse(value) : value;
+    }
+    return value;
+  };
+  try {
+    const result = await read(await post(addMembers, { groupId: "g1", memberIds: ["other-new"] }));
+    assert.equal(result.status, 404, "unknown user should be rejected after the raw group comparison succeeds");
+    assert.equal(result.data.message, "No valid users were selected");
+  } finally {
+    h.db.get = originalGet;
+  }
+});
