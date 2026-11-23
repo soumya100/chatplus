@@ -22,13 +22,15 @@ export default function SuperAdminDashboard() {
   const load = useCallback(async (search = "", pageOffset = 0) => {
     setLoading(true)
     try {
-      const [response, auditResponse] = await Promise.all([
-        axios.get("/api/superadmin/overview", { params: { q: search, limit: 100, offset: pageOffset } }),
-        axios.get("/api/superadmin/audit", { params: { limit: 25 } }),
-      ])
+      const response = await axios.get("/api/superadmin/overview", { params: { q: search, limit: 100, offset: pageOffset } })
       setData(response.data)
       setOffset(pageOffset)
-      setAuditEvents(auditResponse.data.events || [])
+      try {
+        const auditResponse = await axios.get("/api/superadmin/audit", { params: { limit: 25 } })
+        setAuditEvents(auditResponse.data.events || [])
+      } catch {
+        setAuditEvents([])
+      }
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Unable to load the SuperAdmin dashboard")
     } finally { setLoading(false); setAuditLoading(false) }
