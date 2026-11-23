@@ -22,7 +22,7 @@ test("community group creation atomically links the group and indexes every sele
   assert.ok(h.getSetMembers("groups").includes(group.id));
   assert.ok(h.getSetMembers("group:" + group.id + ":members").includes("member"));
   assert.ok(h.getSetMembers("user:member:groups").includes(group.id));
-  const community = h.getCommunity(communityId);
+  const community = JSON.parse(h.getKv("community:" + communityId));
   assert.ok(community.groupIds.includes(group.id));
 });
 
