@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import { rateLimit } from "@/lib/ratelimit"
-import { createHash } from "crypto"
+import { createHash, timingSafeEqual } from "crypto"
 
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const ip = (req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown").split(",")[0].trim()
     const [ipLimit, emailLimit] = await Promise.all([
       rateLimit(ip, "email-otp-verify", { limit: 15, windowSeconds: 900 }),
-      rateLimit(email, "email-otp-verify", { limit: 8, windowSeconds: 900 }),
+      rateLimit(createHash("sha256").update(email).digest("hex"), "email-otp-verify", { limit: 8, windowSeconds: 900 }),
     ])
     if (!ipLimit.success || !emailLimit.success) return json({ message: "Too many verification attempts. Request a new code later." }, 429)
 
@@ -31,7 +31,10 @@ export async function POST(req: Request) {
     }
 
     const submitted = createHash("sha256").update(`${email}:${code}:${process.env.NEXTAUTH_SECRET || ""}`).digest("hex")
-    if (submitted !== record.hash) {
+    const expectedBuffer = Buffer.from(record.hash, "hex")
+    const submittedBuffer = Buffer.from(submitted, "hex")
+    const isValid = expectedBuffer.length === submittedBuffer.length && timingSafeEqual(expectedBuffer, submittedBuffer)
+    if (!isValid) {
       const next = { ...record, attempts: record.attempts + 1 }
       if (next.attempts >= 5) await db.del(`signup:otp:${email}`)
       else await db.set(`signup:otp:${email}`, JSON.stringify(next), { ex: Math.max(1, 600 - Math.floor((Date.now() - record.createdAt) / 1000)) })
