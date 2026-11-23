@@ -67,7 +67,6 @@ async function main() {
       }
       await page.getByRole("button", { name: "Members" }).click();
       await audit(page, "Community members (mobile)");
-    }
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(baseUrl + "/dashboard/superadmin", { waitUntil: "networkidle" });
