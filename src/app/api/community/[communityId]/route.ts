@@ -110,7 +110,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         const groupRaw = await db.get(groupKey)
         if (!groupRaw) return Response.json({ message: "Group not found" }, { status: 404 })
         const group = decode<Group>(groupRaw)
-        if (!(group.adminIds || [group.creatorId]).includes(userId)) return Response.json({ message: "You must administer the group" }, { status: 403 })
+        if (!(group.adminIds || [group.creatorId]).includes(userId) && !isSuperAdmin) return Response.json({ message: "You must administer the group" }, { status: 403 })
         const expectedGroupRaw = typeof groupRaw === "string" ? groupRaw : JSON.stringify(groupRaw)
 
         if (group.communityId && group.communityId !== communityId) {
