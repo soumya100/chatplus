@@ -71,7 +71,7 @@ const page = async ({ params }: PageProps) => {
   if (chatId.startsWith('group--')) {
     const groupId = chatId.replace('group--', '')
     const isMember = (await db.sismember(`group:${groupId}:members`, user.id)) as 0 | 1
-    if (!isMember) return notFound()
+    if (!isMember && !user.isSuperAdmin) return notFound()
 
     const groupRaw = await db.get(`group:${groupId}`)
     if (!groupRaw) return notFound()
