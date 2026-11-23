@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import axios from "axios"
 import Link from "next/link"
+import CommunityGroupCreator from "@/components/Chat/CommunityGroupCreator"
 import toast from "react-hot-toast"
 import { Bell, Check, ChevronRight, CirclePlus, Layers3, LogOut, Megaphone, Network, Plus, Search, Send, Shield, Trash2, UserPlus, Users, X } from "lucide-react"
 
@@ -25,6 +26,8 @@ export default function WhatsAppCommunities({ groups, sessionId }: Props) {
   const [announcementText, setAnnouncementText] = useState("")
   const [memberEmail, setMemberEmail] = useState("")
   const [groupToAdd, setGroupToAdd] = useState("")
+  const [availableGroups, setAvailableGroups] = useState<Group[]>(groups)
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState("")
   const [newDescription, setNewDescription] = useState("")
@@ -136,8 +139,8 @@ export default function WhatsAppCommunities({ groups, sessionId }: Props) {
     if (saved) { setConfirmAction(null); if (action === "delete" || action === "leave") setActiveTab("announcements") }
   }
 
-  const linkedGroups = selected ? (selected.groupIds || []).map(id => groups.find(group => group.id === id)).filter(Boolean) as Group[] : []
-  const manageableGroups = groups.filter(group =>
+  const linkedGroups = selected ? (selected.groupIds || []).map(id => availableGroups.find(group => group.id === id)).filter(Boolean) as Group[] : []
+  const manageableGroups = availableGroups.filter(group =>
     !selected?.groupIds?.includes(group.id) && (selected?.isSuperAdmin || (group.adminIds || [group.creatorId]).includes(sessionId))
   )
 
@@ -176,7 +179,14 @@ export default function WhatsAppCommunities({ groups, sessionId }: Props) {
               {announcements.length ? <div className="space-y-3">{announcements.map(item => <article key={item.id} className="rounded-xl border border-slate-200 p-4 dark:border-white/10"><div className="flex items-center justify-between gap-3"><span className="text-xs font-semibold text-slate-800 dark:text-slate-100">{item.authorName}</span><time className="text-[10px] text-slate-400" dateTime={new Date(item.createdAt).toISOString()}>{new Date(item.createdAt).toLocaleString()}</time></div><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700 dark:text-slate-200">{item.text}</p></article>)}</div> : <div className="rounded-xl border border-dashed border-slate-200 px-4 py-10 text-center dark:border-white/10"><Megaphone size={23} className="mx-auto text-slate-400"/><p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">No announcements yet</p><p className="mt-1 text-xs text-slate-500">Community admins can post updates here.</p></div>}
             </section>}
 
-            {activeTab === "groups" && <section className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Groups in this community</h3><p className="mt-1 text-xs text-slate-500">Open a group to continue its own conversation.</p></div>{selected.isAdmin && manageableGroups.length > 0 && <div className="flex gap-2"><select aria-label="Choose a group to add" value={groupToAdd} onChange={event => setGroupToAdd(event.target.value)} className="max-w-[190px] rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs dark:border-white/10 dark:bg-slate-950 dark:text-white"><option value="">Add an existing group</option>{manageableGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button type="button" onClick={() => void addGroup()} disabled={busy || !groupToAdd} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Plus size={13}/></button></div>}</div>
+            {activeTab === "groups" && <section className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2">
+  <div><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Groups in this community</h3><p className="mt-1 text-xs text-slate-500">Open a group to continue its own conversation.</p></div>
+  <div className="flex flex-wrap gap-2">
+    {selected.isAdmin && selected.groupIds.length < 20 && <button type="button" onClick={() => setShowCreateGroup(value => !value)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white"><CirclePlus size={13}/> Create group</button>}
+    {selected.isAdmin && manageableGroups.length > 0 && <div className="flex gap-2"><select aria-label="Choose a group to add" value={groupToAdd} onChange={event => setGroupToAdd(event.target.value)} className="max-w-[190px] rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs dark:border-white/10 dark:bg-slate-950 dark:text-white"><option value="">Add an existing group</option>{manageableGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button type="button" onClick={() => void addGroup()} disabled={busy || !groupToAdd} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Plus size={13}/></button></div>}
+  </div>
+</div>
+{showCreateGroup && selected.isAdmin && <CommunityGroupCreator communityId={selected.id} members={selected.members || []} onClose={() => setShowCreateGroup(false)} onCreated={group => { setAvailableGroups(current => [...current.filter(item => item.id !== group.id), group]); setShowCreateGroup(false); void load(); }} />}
               {linkedGroups.length ? <div className="grid gap-3 sm:grid-cols-2">{linkedGroups.map(group => <article key={group.id} className="rounded-xl border border-slate-200 p-4 dark:border-white/10"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-300"><Users size={18}/></span><div className="min-w-0 flex-1"><h4 className="truncate text-sm font-semibold text-slate-900 dark:text-white">{group.name}</h4><p className="text-[11px] text-slate-500">{group.memberIds?.length || 0} group members</p></div></div><div className="mt-3 flex items-center justify-between"><Link href={`/dashboard/chats/group--${group.id}`} className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-300">Open group chat →</Link>{selected.isAdmin && <button type="button" disabled={busy} onClick={() => void mutate(selected,{action:"removeGroup",groupId:group.id},"Group removed from community")} className="text-[11px] font-medium text-rose-600 hover:underline dark:text-rose-300">Unlink</button>}</div></article>)}</div> : <div className="rounded-xl border border-dashed border-slate-200 p-9 text-center dark:border-white/10"><Layers3 size={22} className="mx-auto text-slate-400"/><p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">No groups linked</p><p className="mt-1 text-xs text-slate-500">Community admins can add group chats they administer.</p></div>}</section>}
 
             {activeTab === "members" && <section className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Community members</h3><p className="mt-1 text-xs text-slate-500">Manage who belongs to this community.</p></div><span className="text-xs text-slate-400">{selected.memberIds?.length || 0} total</span></div>
