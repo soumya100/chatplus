@@ -45,9 +45,9 @@ export async function GET() {
       db.smembers("users") as Promise<string[]>,
     ])
     communityIds = Array.from(new Set(indexed || []))
-    const indexPipeline = db.pipeline()
-    ;(allUsers || []).forEach(id => indexPipeline.smembers(`user:${id}:communities`))
-    const indexes = allUsers?.length ? await indexPipeline.exec() : []
+    const indexes = allUsers?.length
+      ? await Promise.all(allUsers.map(id => db.smembers(`user:${id}:communities`)))
+      : []
     indexes.forEach(value => { if (Array.isArray(value)) value.forEach(id => communityIds.push(String(id))) })
     communityIds = Array.from(new Set(communityIds))
   } else {
