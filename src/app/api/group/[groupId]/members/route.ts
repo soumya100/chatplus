@@ -15,6 +15,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ groupId
   try {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
+    const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
     if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
 
     const { groupId } = await params
@@ -25,7 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ groupId
     if (!rawGroup) return Response.json({ message: "Group not found" }, { status: 404 })
 
     const group = (typeof rawGroup === "string" ? JSON.parse(rawGroup) : rawGroup) as Group
-    if (!(group.memberIds || []).includes(userId)) {
+    if (!(group.memberIds || []).includes(userId) && !isSuperAdmin) {
       return Response.json({ message: "You are not a member of this group" }, { status: 403 })
     }
 
