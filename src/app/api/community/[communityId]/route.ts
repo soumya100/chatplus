@@ -14,6 +14,8 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("acceptInvite") }),
   z.object({ action: z.literal("declineInvite") }),
   z.object({ action: z.literal("removeMember"), memberId: z.string().min(1) }),
+  z.object({ action: z.literal("promoteAdmin"), memberId: z.string().min(1) }),
+  z.object({ action: z.literal("demoteAdmin"), memberId: z.string().min(1) }),
   z.object({ action: z.literal("leave") }),
   z.object({ action: z.literal("delete") })
 ])
@@ -83,6 +85,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         if (!invited) return Response.json({ message: "No pending invitation" }, { status: 404 })
       } else if (!isMember) {
         return Response.json({ message: "Not a community member" }, { status: 403 })
+      }
+      if ((action === "promoteAdmin" || action === "demoteAdmin") && userId !== community.ownerId) {
+        return Response.json({ message: "Only the community owner can change admin roles" }, { status: 403 })
       }
       if (action === "delete" && userId !== community.ownerId) {
         return Response.json({ message: "Only the community owner can delete it" }, { status: 403 })
@@ -161,6 +166,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         // Idempotent removal from both sides of the invitation index.
         ops.push({ type: "srem", key: `community:${communityId}:invites`, value: userId })
         ops.push({ type: "srem", key: `user:${userId}:community-invites`, value: communityId })
+      } else if (parsed.data.action === "promoteAdmin") {
+        const targetId = parsed.data.memberId
+        if (!next.memberIds.includes(targetId)) return Response.json({ message: "User is not a community member" }, { status: 404 })
+        next.adminIds = Array.from(new Set([...next.adminIds, targetId]))
+      } else if (parsed.data.action === "demoteAdmin") {
+        const targetId = parsed.data.memberId
+        if (targetId === community.ownerId) return Response.json({ message: "The community owner must remain an admin" }, { status: 400 })
+        if (!next.memberIds.includes(targetId)) return Response.json({ message: "User is not a community member" }, { status: 404 })
+        next.adminIds = next.adminIds.filter((id: string) => id !== targetId)
       } else if (parsed.data.action === "removeMember") {
         const targetId = parsed.data.memberId
         if (targetId === community.ownerId) return Response.json({ message: "Transfer ownership before removing the owner" }, { status: 400 })
@@ -178,6 +192,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
           ops.push({ type: "srem", key: `user:${inviteeId}:community-invites`, value: communityId })
         }
         ops.push({ type: "del", key: `community:${communityId}:invites` })
+        ops.push({ type: "srem", key: "communities", value: communityId })
         for (const groupId of next.groupIds) {
           const groupKey = `group:${groupId}`
           const groupRaw = await db.get(groupKey)
@@ -198,6 +213,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
           const inviteIds = await db.smembers(`community:${communityId}:invites`) as string[]
           for (const inviteeId of inviteIds || []) ops.push({ type: "srem", key: `user:${inviteeId}:community-invites`, value: communityId })
           ops.push({ type: "del", key: `community:${communityId}:invites` })
+          ops.push({ type: "srem", key: "communities", value: communityId })
           for (const groupId of next.groupIds) {
             const groupKey = `group:${groupId}`
             const groupRaw = await db.get(groupKey)
