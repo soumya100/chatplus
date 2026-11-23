@@ -74,6 +74,15 @@ test("register: IP-based sliding window allows 5 attempts per minute", async () 
   assert.equal(blocked.headers.get("retry-after"), "60");
 });
 
+test("register: refuses account creation until the email verification marker exists", async () => {
+  h.reset();
+  const result = await status(await register.POST(h.request({
+    name: "Alice", email: "alice@example.test", password: "Sup3rSecret!",
+  })));
+  assert.equal(result.status, 403);
+  assert.equal(h.getKv("user:email:alice@example.test"), null);
+});
+
 // -------------------------------------------------------------- users search
 test("users search: matches names, stripped names and emails with relationship flags", async () => {
   h.reset();
