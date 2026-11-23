@@ -11,11 +11,12 @@ const createSchema = z.object({ name: z.string().trim().min(2).max(60), descript
 export async function GET() {
   const session = await getServerSession(authOptions)
   const userId = session?.user?.id
+  const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
   if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
 
   const [ids, inviteIds] = await Promise.all([
-    db.smembers(`user:${userId}:communities`) as Promise<string[]>,
-    db.smembers(`user:${userId}:community-invites`) as Promise<string[]>
+    (isSuperAdmin ? db.smembers("communities") : db.smembers(`user:${userId}:communities`)) as Promise<string[]>,
+    (isSuperAdmin ? Promise.resolve([]) : db.smembers(`user:${userId}:community-invites`)) as Promise<string[]>
   ])
   const allIds = Array.from(new Set([...(ids || []), ...(inviteIds || [])]))
   if (!allIds.length) return Response.json({ communities: [], invites: [] })
@@ -29,7 +30,7 @@ export async function GET() {
       if (value) byId.set(allIds[index], value)
     } catch {}
   })
-  const communities = (ids || []).flatMap(id => byId.has(id) ? [{ ...byId.get(id), isAdmin: (byId.get(id).adminIds || [byId.get(id).ownerId]).includes(userId), isOwner: byId.get(id).ownerId === userId }] : [])
+  const communities = (ids || []).flatMap(id => byId.has(id) ? [{ ...byId.get(id), isAdmin: isSuperAdmin || (byId.get(id).adminIds || [byId.get(id).ownerId]).includes(userId), isOwner: byId.get(id).ownerId === userId }] : [])
   const memberIds = Array.from(new Set(communities.flatMap(community => community.memberIds || [])))
   const memberPipeline = db.pipeline()
   memberIds.forEach(id => memberPipeline.get(`user:${id}`))
