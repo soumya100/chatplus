@@ -402,6 +402,7 @@ const db = {
       const current = readRaw(keys[0]);
       if (!current || current !== args[0]) return 0;
       writeRaw(keys[0], args[1]);
+      writeRaw(keys[1], args[2]);
       return 1;
     }
     if (script.includes("consume-password-reset-token-v1")) {
