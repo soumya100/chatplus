@@ -47,3 +47,34 @@ test("OTP send and verification failures return controlled client-facing message
   assert.match(signup, /Unable to connect to the server/);
   assert.match(signup, /role="alert"/);
 });
+
+test("search fallbacks skip malformed messages and surface service failures instead of stale results", () => {
+  const search = read("src/app/api/message/search/route.ts");
+  const chat = read("src/components/Chat/index.tsx");
+  assert.match(search, /catch \{/);
+  assert.match(search, /continue/);
+  assert.match(search, /Internal server error/);
+  assert.match(chat, /message-search/);
+  assert.match(chat, /Search request failed/);
+});
+
+test("realtime configuration fails closed with actionable configuration errors", () => {
+  const realtime = read("src/lib/pusher.ts");
+  assert.match(realtime, /Pusher server is not configured/);
+  assert.match(realtime, /PUSHER_APP_ID/);
+  assert.match(realtime, /PUSHER_APP_SECRET/);
+  assert.match(realtime, /Pusher client is not configured/);
+  assert.match(realtime, /NEXT_PUBLIC_PUSHER_APP_KEY/);
+  assert.match(realtime, /Defer SDK construction until/);
+});
+
+test("navigation has loading, not-found and dashboard error recovery states", () => {
+  const loading = read("src/app/(dashboard)/dashboard/chats/[chatId]/loading.tsx");
+  const notFound = read("src/app/not-found.tsx");
+  const dashboardError = read("src/app/(dashboard)/dashboard/error.tsx");
+  assert.match(loading, /Skeleton/);
+  assert.match(notFound, /We can’t find that page/);
+  assert.match(notFound, /Back to Chat\+/);
+  assert.match(dashboardError, /role="alert"/);
+  assert.match(dashboardError, /Retry loading chats/);
+});
