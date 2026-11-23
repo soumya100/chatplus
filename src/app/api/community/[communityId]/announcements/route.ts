@@ -7,6 +7,7 @@ import { z } from "zod"
 export const dynamic = "force-dynamic"
 
 const appendAnnouncement = `
+-- community-announcement-cas-v1
 local current = redis.call("GET", KEYS[1])
 if current ~= ARGV[1] then return 0 end
 redis.call("SET", KEYS[1], ARGV[2])
