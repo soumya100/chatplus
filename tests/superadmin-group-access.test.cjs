@@ -76,8 +76,8 @@ test("SuperAdmin can use group activity tools and moderate group messages but ca
     id: "private-message", senderId: "owner", receiverId: "member",
     text: "Private conversation", timestamp: 124,
   }], "owner", "member");
-  const privateAttempt = await status(await deleteMessage.POST(h.request({
+  const privateAttempt = await deleteMessage.POST(h.request({
     messageId: "private-message", chatId: "owner--member",
-  })));
+  }));
   assert.equal(privateAttempt.status, 403, "SuperAdmin moderation never bypasses direct-chat privacy");
 });
