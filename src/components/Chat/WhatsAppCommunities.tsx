@@ -149,7 +149,7 @@ export default function WhatsAppCommunities({ groups, sessionId }: Props) {
   return <main className="mx-auto max-w-7xl space-y-5 p-3 sm:p-6">
     <header className="flex flex-wrap items-center justify-between gap-3">
       <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400"><Network size={15}/> Chat+ spaces</div><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Communities</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Keep related group chats together, with one shared announcements space.</p></div>
-      <button type="button" onClick={() => setShowCreate(value => !value)} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"><CirclePlus size={16}/> Create community</button>
+      <button type="button" onClick={() => setShowCreate(value => !value)} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"><Plus size={16}/> Create community</button>
     </header>
 
     {showCreate && <form onSubmit={create} className="grid gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-400/20 dark:bg-indigo-400/[0.06] sm:grid-cols-[1fr_1.5fr_auto] sm:items-end">
@@ -182,7 +182,7 @@ export default function WhatsAppCommunities({ groups, sessionId }: Props) {
             {activeTab === "groups" && <section className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2">
   <div><h3 className="text-sm font-semibold text-slate-900 dark:text-white">Groups in this community</h3><p className="mt-1 text-xs text-slate-500">Open a group to continue its own conversation.</p></div>
   <div className="flex flex-wrap gap-2">
-    {selected.isAdmin && selected.groupIds.length < 20 && <button type="button" onClick={() => setShowCreateGroup(value => !value)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white"><CirclePlus size={13}/> Create group</button>}
+    {selected.isAdmin && selected.groupIds.length < 20 && <button type="button" onClick={() => setShowCreateGroup(value => !value)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white"><Plus size={13}/> Create group</button>}
     {selected.isAdmin && selected.groupIds.length < 20 && manageableGroups.length > 0 && <div className="flex gap-2"><select aria-label="Choose a group to add" value={groupToAdd} onChange={event => setGroupToAdd(event.target.value)} className="max-w-[190px] rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs dark:border-white/10 dark:bg-slate-950 dark:text-white"><option value="">Add an existing group</option>{manageableGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button type="button" onClick={() => void addGroup()} disabled={busy || !groupToAdd} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Plus size={13}/></button></div>}
   </div>
 </div>
