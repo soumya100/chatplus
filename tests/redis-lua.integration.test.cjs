@@ -339,3 +339,20 @@ test("Redis Lua integration: community creation checks every selected group and 
   assert.equal(stale, "0", "a stale selected-group version cannot create a competing community");
   assert.equal(await redis(["EXISTS", "community:c2"]), "0");
 });
+
+
+test("Redis Lua integration: SuperAdmin account moderation compare-and-set prevents stale profile overwrites", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/superadmin/overview/route.ts", "atomicUserModeration");
+  await redis(["FLUSHDB"]);
+  const key = "user:u1";
+  const original = JSON.stringify({ id: "u1", email: "u1@example.test", name: "Before", password: "hash" });
+  const suspended = JSON.stringify({ id: "u1", email: "u1@example.test", name: "Before", password: "hash", suspendedAt: 123 });
+  const staleUpdated = JSON.stringify({ id: "u1", email: "u1@example.test", name: "Stale", password: "hash" });
+  await redis(["SET", key, original]);
+
+  const committed = await evalLua(script, [key], [original, suspended]);
+  assert.equal(committed, "1");
+  const stale = await evalLua(script, [key], [original, staleUpdated]);
+  assert.equal(stale, "0");
+  assert.equal(await redis(["GET", key]), suspended, "stale moderation must not overwrite the committed suspension");
+});
