@@ -308,3 +308,34 @@ test("Redis Lua integration: password reset token consumption is atomic and sing
   const replay = await evalLua(script, [tokenKey, userKey], [resetRecord, updatedUser, oldUser]);
   assert.equal(replay, "0", "a reset token cannot be consumed twice");
 });
+
+
+test("Redis Lua integration: community creation checks every selected group and commits all membership indexes atomically", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/community/route.ts", "atomicCreateCommunity");
+  await redis(["FLUSHDB"]);
+  const communityKey = "community:c1";
+  const groupKey = "group:g1";
+  const globalCommunities = "communities";
+  const ownerIndex = "user:owner:communities";
+  const memberIndex = "user:member:communities";
+  const beforeGroup = JSON.stringify({ id: "g1", creatorId: "owner", memberIds: ["owner", "member"] });
+  const afterGroup = JSON.stringify({ id: "g1", creatorId: "owner", memberIds: ["owner", "member"], communityId: "c1" });
+  const community = JSON.stringify({ id: "c1", ownerId: "owner", memberIds: ["owner", "member"], groupIds: ["g1"], announcements: [] });
+  await redis(["SET", groupKey, beforeGroup]);
+
+  const committed = await evalLua(script, [communityKey, globalCommunities, groupKey, ownerIndex, memberIndex], [
+    community, JSON.stringify([beforeGroup]), JSON.stringify([afterGroup]), JSON.stringify(["owner", "member"]),
+  ]);
+  assert.equal(committed, "1");
+  assert.equal(await redis(["GET", communityKey]), community);
+  assert.equal(await redis(["GET", groupKey]), afterGroup);
+  assert.equal(await redis(["SISMEMBER", globalCommunities, "c1"]), "1");
+  assert.equal(await redis(["SISMEMBER", ownerIndex, "c1"]), "1");
+  assert.equal(await redis(["SISMEMBER", memberIndex, "c1"]), "1");
+
+  const stale = await evalLua(script, ["community:c2", globalCommunities, groupKey, "user:owner:communities"], [
+    JSON.stringify({ id: "c2" }), JSON.stringify([beforeGroup]), JSON.stringify([JSON.stringify({ id: "g1", communityId: "c2" })]), JSON.stringify(["owner"]),
+  ]);
+  assert.equal(stale, "0", "a stale selected-group version cannot create a competing community");
+  assert.equal(await redis(["EXISTS", "community:c2"]), "0");
+});
