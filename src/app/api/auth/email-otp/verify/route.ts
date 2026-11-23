@@ -12,21 +12,22 @@ export async function POST(req: Request) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\d{6}$/.test(code)) return json({ message: "Enter the 6-digit code sent to your email." }, 400)
 
     const ip = (req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown").split(",")[0].trim()
+    const emailKey = createHash("sha256").update(email).digest("hex")
     const [ipLimit, emailLimit] = await Promise.all([
       rateLimit(ip, "email-otp-verify", { limit: 15, windowSeconds: 900 }),
       rateLimit(createHash("sha256").update(email).digest("hex"), "email-otp-verify", { limit: 8, windowSeconds: 900 }),
     ])
     if (!ipLimit.success || !emailLimit.success) return json({ message: "Too many verification attempts. Request a new code later." }, 429)
 
-    const raw = await db.get(`signup:otp:${email}`) as string | { hash: string; attempts: number; createdAt: number } | null
+    const raw = await db.get(`signup:otp:${emailKey}`) as string | { hash: string; attempts: number; createdAt: number } | null
     if (!raw) return json({ message: "This code has expired. Request a new one." }, 410)
     const record = (typeof raw === "string" ? JSON.parse(raw) : raw) as { hash: string; attempts: number; createdAt: number }
     if (!record || Date.now() - record.createdAt > 600_000) {
-      await db.del(`signup:otp:${email}`)
+      await db.del(`signup:otp:${emailKey}`)
       return json({ message: "This code has expired. Request a new one." }, 410)
     }
     if (record.attempts >= 5) {
-      await db.del(`signup:otp:${email}`)
+      await db.del(`signup:otp:${emailKey}`)
       return json({ message: "Too many incorrect attempts. Request a new code." }, 429)
     }
 
@@ -36,13 +37,13 @@ export async function POST(req: Request) {
     const isValid = expectedBuffer.length === submittedBuffer.length && timingSafeEqual(expectedBuffer, submittedBuffer)
     if (!isValid) {
       const next = { ...record, attempts: record.attempts + 1 }
-      if (next.attempts >= 5) await db.del(`signup:otp:${email}`)
-      else await db.set(`signup:otp:${email}`, JSON.stringify(next), { ex: Math.max(1, 600 - Math.floor((Date.now() - record.createdAt) / 1000)) })
+      if (next.attempts >= 5) await db.del(`signup:otp:${emailKey}`)
+      else await db.set(`signup:otp:${emailKey}`, JSON.stringify(next), { ex: Math.max(1, 600 - Math.floor((Date.now() - record.createdAt) / 1000)) })
       return json({ message: next.attempts >= 5 ? "Too many incorrect attempts. Request a new code." : "That code doesn't match. Check it and try again." }, 400)
     }
 
-    await db.set(`signup:verified:${email}`, "1", { ex: 1800 })
-    await db.del(`signup:otp:${email}`)
+    await db.set(`signup:verified:${emailKey}`, "1", { ex: 1800 })
+    await db.del(`signup:otp:${emailKey}`)
     return json({ success: true, message: "Email verified successfully." })
   } catch (error) {
     console.error("[email-otp] verification failed", error)
