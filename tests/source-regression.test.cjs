@@ -280,19 +280,24 @@ test("signup email verification is enforced by both OTP APIs and registration", 
   const signup = read("src/components/signup/index.tsx");
 
   assert.match(send, /randomInt\(0, 1_000_000\)/);
+  assert.match(send, /randomBytes\(32\)/);
+  assert.match(send, /otp-cooldown/);
   assert.match(send, /RESEND_API_KEY/);
   assert.match(send, /rateLimit\(/);
   assert.match(send, /ex:\s*600/);
   assert.match(verify, /timingSafeEqual/);
+  assert.match(verify, /storedChallenge/);
   assert.match(verify, /attempts\s*>=\s*5/);
   assert.match(verify, /signup:verified:/);
   assert.match(register, /signup:verified:/);
   assert.match(register, /Please verify your email address/);
+  assert.match(register, /emailVerificationToken/);
   assert.match(signup, /signup-otp/);
   assert.match(signup, /autoComplete="one-time-code"/);
   assert.match(signup, /verifyEmailOtp\(next\)/);
   assert.match(signup, /Resend in/);
   assert.match(signup, /!emailVerified/);
+  assert.match(signup, /emailVerificationToken/);
 });
 
 test("chat viewport owns message scrolling and keeps composer outside the scroll region", () => {
