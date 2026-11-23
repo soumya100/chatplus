@@ -131,7 +131,7 @@ export default function WhatsAppCommunities({ groups, sessionId }: Props) {
 
   const linkedGroups = selected ? (selected.groupIds || []).map(id => groups.find(group => group.id === id)).filter(Boolean) as Group[] : []
   const manageableGroups = groups.filter(group =>
-    !selected?.groupIds?.includes(group.id) && ((group.adminIds || [group.creatorId]).includes(sessionId))
+    !selected?.groupIds?.includes(group.id) && (selected?.isSuperAdmin || (group.adminIds || [group.creatorId]).includes(sessionId))
   )
 
   if (loading) return <div className="mx-auto flex min-h-[50vh] max-w-6xl items-center justify-center text-sm text-slate-500">Loading your communities…</div>
