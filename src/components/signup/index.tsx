@@ -64,7 +64,7 @@ const Signup: FC<SignupProps> = () => {
 
     async function sendEmailOtp() {
         const normalizedEmail = email.trim().toLowerCase()
-        if (!/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(normalizedEmail)) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
             setErrorMessage('Enter a valid email address before requesting a code.')
             return
         }
