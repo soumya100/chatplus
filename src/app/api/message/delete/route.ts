@@ -89,7 +89,7 @@ export async function POST(req: Request) {
         const { messageId, chatId } = parsed.data
         const canModerateGroupMessages = Boolean(session.user.isSuperAdmin) && chatId.startsWith("group--")
 
-        if (!(await hasCurrentChatAccess(db, chatId, userId))) return new Response("Forbidden", { status: 403 })
+        if (!canModerateGroupMessages && !(await hasCurrentChatAccess(db, chatId, userId))) return new Response("Forbidden", { status: 403 })
 
         // Preflight ownership; the Lua script repeats the check and enqueues
         // owned Blob URLs atomically with the tombstone before any external call.
