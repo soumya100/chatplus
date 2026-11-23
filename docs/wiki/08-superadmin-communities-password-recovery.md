@@ -16,7 +16,7 @@ After changing the allowlist, sign out and sign back in so the NextAuth JWT is r
 
 A community contains:
 - A community-wide announcement feed (admins can publish; members can read).
-- Existing group chats linked to the community. Each group keeps its own message history and membership controls.
+- Existing group chats linked to the community, plus the ability for community admins to create new group chats directly inside the community. Each group keeps its own message history and membership controls.
 - A community member directory, invitations, and owner-managed admin roles.
 - A 2,000-member cap to bound atomic Redis transactions.
 
