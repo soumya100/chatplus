@@ -24,7 +24,8 @@ const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({
   profileName, 
   sessionId, 
   unseenFriendRequests,
-  initialUnreadCounts = {}
+  initialUnreadCounts = {},
+  isSuperAdmin = false
 }) => {
   const [openAddFriendModal, setopenAddFriendModal] = useState(false)
   const [openAvatarModal, setOpenAvatarModal] = useState(false)
