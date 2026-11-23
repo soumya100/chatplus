@@ -17,6 +17,7 @@ const schema = z.object({
 })
 
 const consumeResetToken = `
+-- consume-password-reset-token-v1
 local resetRaw = redis.call("GET", KEYS[1])
 if not resetRaw or resetRaw ~= ARGV[1] then return 0 end
 local userRaw = redis.call("GET", KEYS[2])
