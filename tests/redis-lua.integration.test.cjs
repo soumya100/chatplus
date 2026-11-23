@@ -360,3 +360,37 @@ test("Redis Lua integration: SuperAdmin account moderation compare-and-set preve
   assert.equal(await redis(["GET", key]), suspended, "stale moderation must not overwrite the committed suspension");
   assert.equal(await redis(["GET", auditKey]), audit, "stale moderation must not overwrite the audit record");
 });
+
+
+test("Redis Lua integration: community group creation atomically updates community, group and member indexes", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/community/[communityId]/groups/route.ts", "createCommunityGroup");
+  await redis(["FLUSHDB"]);
+  const communityKey = "community:c1";
+  const groupKey = "group:g1";
+  const memberSet = "group:g1:members";
+  const ownerGroupIndex = "user:owner:groups";
+  const memberGroupIndex = "user:member:groups";
+  const ownerCommunityIndex = "user:owner:communities";
+  const beforeCommunity = JSON.stringify({ id: "c1", ownerId: "owner", adminIds: ["owner"], memberIds: ["owner", "member"], groupIds: [] });
+  const afterCommunity = JSON.stringify({ id: "c1", ownerId: "owner", adminIds: ["owner"], memberIds: ["owner", "member"], groupIds: ["g1"] });
+  const group = JSON.stringify({ id: "g1", communityId: "c1", creatorId: "owner", memberIds: ["owner", "member"] });
+  await redis(["SET", communityKey, beforeCommunity]);
+
+  const result = await evalLua(script, [communityKey, groupKey, "groups", memberSet, ownerGroupIndex, memberGroupIndex, ownerCommunityIndex], [
+    beforeCommunity, afterCommunity, group, JSON.stringify(["owner", "member"]), "g1", "c1",
+  ]);
+  assert.equal(result, "1");
+  assert.equal(await redis(["GET", communityKey]), afterCommunity);
+  assert.equal(await redis(["GET", groupKey]), group);
+  assert.equal(await redis(["SISMEMBER", "groups", "g1"]), "1");
+  assert.equal(await redis(["SISMEMBER", memberSet, "member"]), "1");
+  assert.equal(await redis(["SISMEMBER", ownerGroupIndex, "g1"]), "1");
+  assert.equal(await redis(["SISMEMBER", memberGroupIndex, "g1"]), "1");
+  assert.equal(await redis(["SISMEMBER", ownerCommunityIndex, "c1"]), "1");
+
+  const stale = await evalLua(script, [communityKey, "group:g2", "groups", "group:g2:members", "user:owner:groups", ownerCommunityIndex], [
+    JSON.stringify({ id: "stale" }), afterCommunity, JSON.stringify({ id: "g2" }), JSON.stringify(["owner"]), "g2", "c1",
+  ]);
+  assert.equal(stale, "0", "a stale community revision must not create a detached group");
+  assert.equal(await redis(["EXISTS", "group:g2"]), "0");
+});
