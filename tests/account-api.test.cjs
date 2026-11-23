@@ -5,6 +5,7 @@ const { createHash } = require("crypto");
 const h = require("./helpers/group-api-harness.cjs");
 
 const register = h.loadRoute("src/app/api/auth/register/route.ts");
+const verifyOtp = h.loadRoute("src/app/api/auth/email-otp/verify/route.ts");
 const search = h.loadRoute("src/app/api/users/search/route.ts");
 const pusherAuth = h.loadRoute("src/app/api/pusher/auth/route.ts");
 const avatar = h.loadRoute("src/app/api/user/avatar/route.ts");
@@ -83,6 +84,48 @@ test("register: refuses account creation until the email verification marker exi
   })));
   assert.equal(result.status, 403);
   assert.equal(h.getKv("user:email:alice@example.test"), null);
+});
+
+test("email OTP: requires the matching signup challenge and consumes a valid code", async () => {
+  h.reset();
+  const email = "alice@example.test";
+  const emailKey = createHash("sha256").update(email).digest("hex");
+  const challengeToken = "b".repeat(64);
+  const code = "123456";
+  const hash = createHash("sha256").update(email + ":" + code + ":").digest("hex");
+  h.seedKv("signup:otp:" + emailKey, JSON.stringify({
+    hash, challengeToken, attempts: 0, createdAt: Date.now(),
+  }));
+
+  const wrongChallenge = await status(await verifyOtp.POST(h.request({
+    email, code, challengeToken: "c".repeat(64),
+  })));
+  assert.equal(wrongChallenge.status, 403);
+
+  const verified = await status(await verifyOtp.POST(h.request({
+    email, code, challengeToken,
+  })));
+  assert.equal(verified.status, 200);
+  assert.equal(h.getKv("signup:verified:" + emailKey + ":" + challengeToken), "1");
+  assert.equal(h.getKv("signup:otp:" + emailKey), null);
+});
+
+test("email OTP: rejects incorrect codes and enforces the attempt limit", async () => {
+  h.reset();
+  const email = "attempts@example.test";
+  const emailKey = createHash("sha256").update(email).digest("hex");
+  const challengeToken = "d".repeat(64);
+  const hash = createHash("sha256").update(email + ":654321:").digest("hex");
+  h.seedKv("signup:otp:" + emailKey, JSON.stringify({
+    hash, challengeToken, attempts: 4, createdAt: Date.now(),
+  }));
+
+  const wrong = await status(await verifyOtp.POST(h.request({
+    email, code: "000000", challengeToken,
+  })));
+  assert.equal(wrong.status, 400);
+  assert.equal(wrong.data.message, "Too many incorrect attempts. Request a new code.");
+  assert.equal(h.getKv("signup:otp:" + emailKey), null);
 });
 
 // -------------------------------------------------------------- users search
