@@ -56,19 +56,23 @@ test("SuperAdmin can use group activity tools and moderate group messages but ca
   h.setUser("root", { name: "Root", email: "root@example.test" });
   h.setSession("root", "Root", { email: "root@example.test", isSuperAdmin: true });
 
-  const features = await status(await groupFeatures.POST(h.request({
+  const featuresResponse = await groupFeatures.POST(h.request({
     action: "announce", text: "Platform moderation notice",
-  }), { params: Promise.resolve({ groupId: "g1" }) }));
-  assert.equal(features.status, 200);
+  }), { params: Promise.resolve({ groupId: "g1" }) });
+  const featuresText = await featuresResponse.text();
+  assert.equal(featuresResponse.status, 200, "group feature access failed: " + featuresText);
+  const features = { status: featuresResponse.status, data: JSON.parse(featuresText) };
 
   h.setMessages([{
     id: "moderation-target", senderId: "owner", receiverId: "group--g1",
     text: "Abusive group message", timestamp: 123,
   }], "g1");
-  const moderated = await status(await deleteMessage.POST(h.request({
+  const moderatedResponse = await deleteMessage.POST(h.request({
     messageId: "moderation-target", chatId: "group--g1",
-  })));
-  assert.equal(moderated.status, 200);
+  }));
+  const moderatedText = await moderatedResponse.text();
+  assert.equal(moderatedResponse.status, 200, "group message moderation failed: " + moderatedText);
+  const moderated = { status: moderatedResponse.status, data: JSON.parse(moderatedText) };
   assert.equal(h.getMessages("g1")[0].isDeleted, true);
   assert.equal(h.getMessages("g1")[0].text, "This message was deleted");
 
