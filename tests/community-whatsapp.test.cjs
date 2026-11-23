@@ -92,3 +92,15 @@ test("community: duplicate group selections are rejected before persistence", as
   assert.equal(response.status, 400);
   assert.equal(h.getSetMembers("communities").length, 0);
 });
+
+test("community home presents announcements and linked group chats together like WhatsApp Communities", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const source = fs.readFileSync(path.join(__dirname, "../src/components/Chat/WhatsAppCommunities.tsx"), "utf8");
+  assert.match(source, /useState<"home" \| "members">\("home"\)/);
+  assert.match(source, /activeTab === "home" && <section/);
+  assert.match(source, /Group chats in this community/);
+  assert.match(source, /Open group chat/);
+  assert.match(source, /Community announcements/);
+  assert.doesNotMatch(source, /id:"groups",label:"Groups"/);
+});
