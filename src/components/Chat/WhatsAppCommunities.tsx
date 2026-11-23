@@ -5,7 +5,7 @@ import axios from "axios"
 import Link from "next/link"
 import CommunityGroupCreator from "@/components/Chat/CommunityGroupCreator"
 import toast from "react-hot-toast"
-import { Bell, Check, ChevronRight, Plus, Layers3, LogOut, Megaphone, Network, Plus, Search, Send, Shield, Trash2, UserPlus, Users, X } from "lucide-react"
+import { Bell, Check, ChevronRight, Layers3, LogOut, Megaphone, Network, Plus, Search, Send, Shield, Trash2, UserPlus, Users, X } from "lucide-react"
 
 type CommunityMember = { id: string; name: string; image?: string }
 type Announcement = { id: string; authorId: string; authorName: string; text: string; createdAt: number }
