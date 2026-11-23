@@ -622,6 +622,7 @@ const db = {
       const deleteGroup = args[7] === "true";
       if (deleteGroup) {
         groups.delete(groupId);
+        srem("groups", groupId);
         features.delete(groupId);
         zsets.delete(`chat:group--${groupId}:messages`);
         return 1;
