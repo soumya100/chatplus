@@ -16,7 +16,7 @@ function walk(directory) {
 test("the API route inventory is complete and every route exports an HTTP handler", () => {
   const apiRoot = path.join(root, "src/app/api");
   const routes = walk(apiRoot).filter(file => /route\.(ts|js)$/.test(file));
-  assert.equal(routes.length, 33, "update this inventory assertion when adding or removing API routes");
+  assert.equal(routes.length, 37, "update this inventory assertion when adding or removing API routes");
 
   for (const file of routes) {
     const source = fs.readFileSync(file, "utf8");
@@ -32,6 +32,8 @@ test("protected API routes have an explicit authentication boundary", () => {
     "auth/register/route.ts",
     "auth/email-otp/route.ts",
     "auth/email-otp/verify/route.ts",
+    "auth/password-reset/request/route.ts",
+    "auth/password-reset/confirm/route.ts",
   ]);
 
   for (const file of routes) {
@@ -44,6 +46,16 @@ test("protected API routes have an explicit authentication boundary", () => {
       `No explicit auth boundary found in ${relative}`
     );
   }
+
+  const resetRequest = read("src/app/api/auth/password-reset/request/route.ts")
+  const resetConfirm = read("src/app/api/auth/password-reset/confirm/route.ts")
+  assert.match(resetRequest, /rateLimit/)
+  assert.match(resetRequest, /randomBytes\\(32\\)/)
+  assert.match(resetRequest, /createHash\\("sha256"\\)/)
+  assert.match(resetRequest, /If an account matches/)
+  assert.match(resetConfirm, /token:\\s*z\\.string\\(\\)\\.regex/)
+  assert.match(resetConfirm, /consume-password-reset-token-v1/)
+  assert.match(resetConfirm, /rateLimit/)
 });
 
 test("chat mounts the member manager and activity panel instead of only toggling state", () => {
