@@ -374,6 +374,7 @@ const db = {
   async eval(script, keys, args) {
     if (scriptRaceHook) scriptRaceHook(script, keys, args);
     if (script.includes("create-community-cas-v1")) {
+      if (forcedConflicts > 0) { forcedConflicts -= 1; return 0; }
       const expectedGroups = JSON.parse(args[1]);
       const updatedGroups = JSON.parse(args[2]);
       const memberIds = JSON.parse(args[3]);
