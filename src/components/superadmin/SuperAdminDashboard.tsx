@@ -14,7 +14,7 @@ export default function SuperAdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  const load = useCallback(async (search = query) => {
+  const load = useCallback(async (search = "") => {
     setLoading(true)
     try {
       const response = await axios.get("/api/superadmin/overview", { params: { q: search, limit: 100 } })
@@ -22,7 +22,7 @@ export default function SuperAdminDashboard() {
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Unable to load the SuperAdmin dashboard")
     } finally { setLoading(false) }
-  }, [query])
+  }, [])
 
   useEffect(() => { void load("") }, [load])
 
@@ -32,7 +32,7 @@ export default function SuperAdminDashboard() {
     try {
       await axios.patch("/api/superadmin/overview", { action, userId: user.id })
       toast.success(action === "suspend" ? "Account suspended" : "Account restored")
-      await load()
+      await load(query)
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Unable to update account")
     } finally { setBusyId(null) }
@@ -49,7 +49,7 @@ export default function SuperAdminDashboard() {
   return <main className="mx-auto max-w-7xl space-y-7 p-4 sm:p-7">
     <header className="flex flex-wrap items-center justify-between gap-4">
       <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-300"><ShieldCheck size={15}/> System administration</div><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">SuperAdmin control center</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Platform-wide visibility and account governance. Every privileged action is authorized server-side and audit logged.</p></div>
-      <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><RefreshCw size={15} className={loading ? "animate-spin" : ""}/> Refresh</button>
+      <button type="button" onClick={() => void load(query)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><RefreshCw size={15} className={loading ? "animate-spin" : ""}/> Refresh</button>
     </header>
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map(card => <article key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900"><div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400"><span>{card.label}</span><card.icon size={17}/></div><p className="mt-3 text-3xl font-bold tabular-nums text-slate-900 dark:text-white">{card.value}</p></article>)}
