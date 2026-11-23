@@ -136,6 +136,8 @@ const Login: FC<LoginProps> = () => {
                         </div>
                     )}
 
+                    <div className="flex justify-end -mb-2"><Link href="/forgot-password" className="text-xs font-medium text-indigo-300 transition hover:text-indigo-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400">Forgot password?</Link></div>
+
                     {/* Credentials Login Form */}
                     <form onSubmit={handleCredentialsLogin} className="space-y-4">
                         <div className="space-y-1.5">
