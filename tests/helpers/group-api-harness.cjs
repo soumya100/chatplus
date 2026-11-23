@@ -373,6 +373,21 @@ const db = {
   async zrange(key, start, end, options) { return zrange(key, start, end, options); },
   async eval(script, keys, args) {
     if (scriptRaceHook) scriptRaceHook(script, keys, args);
+    if (script.includes("community-announcement-cas-v1")) {
+      const current = readRaw(keys[0]);
+      if (!current || current !== args[0]) return 0;
+      writeRaw(keys[0], args[1]);
+      return 1;
+    }
+    if (script.includes("consume-password-reset-token-v1")) {
+      const resetRaw = readRaw(keys[0]);
+      if (!resetRaw || resetRaw !== args[0]) return 0;
+      const userRaw = readRaw(keys[1]);
+      if (!userRaw || userRaw !== args[1]) return -1;
+      writeRaw(keys[1], args[2]);
+      deleteRaw(keys[0]);
+      return 1;
+    }
     if (script.includes("sliding-window-rate-limit-v1")) {
       const now = Number(args[0]);
       const windowMs = Number(args[1]);
