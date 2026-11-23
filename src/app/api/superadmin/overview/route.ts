@@ -51,15 +51,15 @@ export async function GET(req: Request) {
       db.smembers("groups") as Promise<string[]>,
     ])
     const communityIdSet = new Set<string>(indexedCommunities || [])
-    const communityIndexPipeline = db.pipeline()
-    ids.forEach(id => communityIndexPipeline.smembers(`user:${id}:communities`))
-    const communityIndexes = ids.length ? await communityIndexPipeline.exec() : []
+    const communityIndexes = ids.length
+      ? await Promise.all(ids.map(id => db.smembers(`user:${id}:communities`)))
+      : []
     for (const value of communityIndexes) if (Array.isArray(value)) value.forEach(id => communityIdSet.add(String(id)))
     const communityIds = Array.from(communityIdSet)
     const groupIds = new Set<string>(indexedGroups || [])
-    const groupIndexPipeline = db.pipeline()
-    ids.forEach(id => groupIndexPipeline.smembers(`user:${id}:groups`))
-    const groupIndexes = ids.length ? await groupIndexPipeline.exec() : []
+    const groupIndexes = ids.length
+      ? await Promise.all(ids.map(id => db.smembers(`user:${id}:groups`)))
+      : []
     for (const value of groupIndexes) {
       if (Array.isArray(value)) value.forEach(id => groupIds.add(String(id)))
     }
