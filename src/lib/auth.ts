@@ -149,7 +149,7 @@ export const authOptions: NextAuthOptions = {
             if ((dbUser as any)?.suspendedAt) {
                 return { ...token, id: "", exp: 0 }
             }
-            if ((dbUser as any)?.passwordChangedAt && (!token.iat || token.iat * 1000 < Number((dbUser as any).passwordChangedAt))) {
+            if ((dbUser as any)?.passwordChangedAt && (!token.iat || Number(token.iat) * 1000 < Number((dbUser as any).passwordChangedAt))) {
                 return { ...token, id: "", exp: 0 }
             }
             if (!dbUser?.id || dbUser.id !== token.id) {
