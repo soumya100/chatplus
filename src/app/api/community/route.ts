@@ -14,8 +14,23 @@ export async function GET() {
   const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
   if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
 
+  let communityIds: string[] = []
+  if (isSuperAdmin) {
+    const [indexed, allUsers] = await Promise.all([
+      db.smembers("communities") as Promise<string[]>,
+      db.smembers("users") as Promise<string[]>,
+    ])
+    communityIds = Array.from(new Set(indexed || []))
+    const indexPipeline = db.pipeline()
+    ;(allUsers || []).forEach(id => indexPipeline.smembers(`user:${id}:communities`))
+    const indexes = allUsers?.length ? await indexPipeline.exec() : []
+    indexes.forEach(value => { if (Array.isArray(value)) value.forEach(id => communityIds.push(String(id))) })
+    communityIds = Array.from(new Set(communityIds))
+  } else {
+    communityIds = await db.smembers(`user:${userId}:communities`) as string[]
+  }
   const [ids, inviteIds] = await Promise.all([
-    (isSuperAdmin ? db.smembers("communities") : db.smembers(`user:${userId}:communities`)) as Promise<string[]>,
+    Promise.resolve(communityIds),
     (isSuperAdmin ? Promise.resolve([]) : db.smembers(`user:${userId}:community-invites`)) as Promise<string[]>
   ])
   const allIds = Array.from(new Set([...(ids || []), ...(inviteIds || [])]))
@@ -53,6 +68,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
   const userId = session?.user?.id
+  const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
   if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
   const parsed = createSchema.safeParse(await req.json())
   if (!parsed.success) return Response.json({ message: parsed.error.issues[0]?.message || "Invalid community" }, { status: 400 })
@@ -64,7 +80,7 @@ export async function POST(req: Request) {
     const raw = await db.get(`group:${id}`)
     if (!raw) return Response.json({ message: `Group ${id} not found` }, { status: 404 })
     const group = (typeof raw === "string" ? JSON.parse(raw) : raw) as Group
-    if (!(group.adminIds || [group.creatorId]).includes(userId)) return Response.json({ message: "Only admins of every selected group can add it to a community" }, { status: 403 })
+    if (!(group.adminIds || [group.creatorId]).includes(userId) && !isSuperAdmin) return Response.json({ message: "Only admins of every selected group can add it to a community" }, { status: 403 })
     if (group.communityId) return Response.json({ message: "A selected group already belongs to a community. Remove it there before creating this community." }, { status: 409 })
     groups.push(group)
     ;(group.memberIds || []).forEach(id => memberIds.add(id))
