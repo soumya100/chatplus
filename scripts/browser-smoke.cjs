@@ -63,8 +63,8 @@ async function togglePasswordVisibility(page, selector, reveal, engine) {
 // once React has hydrated, a fill sticks and the loop converates on the first
 // pass; anything delivered too early is simply re-filled afterwards.
 const SIGNUP_FIELDS = [
-  { selector: 'input[placeholder="Your Name"]', value: "Smoke Test", label: "name" },
-  { selector: 'input[autocomplete="email"]', value: "smoke@example.test", label: "email" },
+  { selector: '#signup-name', value: "Smoke Test", label: "name" },
+  { selector: '#signup-email', value: "smoke@example.test", label: "email" },
 ];
 
 async function fillSignupField(page, selector, value, label) {
@@ -107,8 +107,8 @@ async function submitSignupExpecting(page, engine, password, confirmation, expec
     for (const { selector, value, label } of SIGNUP_FIELDS) {
       await fillSignupField(page, selector, value, label);
     }
-    await fillSignupField(page, 'input[placeholder="Create a strong password"]', password, "password");
-    await fillSignupField(page, 'input[placeholder="Re-enter your password"]', confirmation, "confirm");
+    await fillSignupField(page, '#signup-password', password, "password");
+    await fillSignupField(page, '#signup-confirm-password', confirmation, "confirm");
     await page.getByRole("button", { name: "Create Account" }).click();
     try {
       await page.getByText(expectedText).waitFor({ timeout: 5_000 });
@@ -186,6 +186,14 @@ async function exerciseBrowser(name, browserType) {
   });
 
   try {
+    await page.route("**/api/auth/email-otp", async route => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ challengeToken: "a".repeat(64), message: "Code sent for browser smoke." }) });
+    });
+    await page.route("**/api/auth/email-otp/verify", async route => {
+      const request = route.request();
+      const payload = request.postDataJSON();
+      await route.fulfill({ status: payload?.code === "123456" ? 200 : 400, contentType: "application/json", body: JSON.stringify(payload?.code === "123456" ? { verified: true } : { message: "Invalid code." }) });
+    });
     await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: /welcome to chat\+/i }).waitFor();
     await page.locator('input[type="email"]').waitFor({ state: "visible" });
@@ -199,6 +207,17 @@ async function exerciseBrowser(name, browserType) {
 
     await page.goto(`${baseUrl}/signup`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: /create an account/i }).waitFor();
+    await page.locator("#signup-name").fill("Smoke Test");
+    await page.locator("#signup-email").fill("smoke@example.test");
+    await page.locator("#signup-password").fill("Abcdef12!");
+    await page.locator("#signup-confirm-password").fill("Abcdef12!");
+    await page.getByRole("button", { name: "Create Account" }).click();
+    await page.getByText(/verify your email address using the OTP/i).waitFor();
+    await page.getByRole("button", { name: "Send OTP" }).click();
+    await page.getByRole("dialog", { name: /verify your email/i }).waitFor();
+    await page.locator("#signup-otp").fill("123456");
+    await page.getByRole("button", { name: "Verify" }).click();
+    await page.getByText("Email verified").waitFor();
     await submitSignupExpecting(
       page, name,
       "abc", "abc",
