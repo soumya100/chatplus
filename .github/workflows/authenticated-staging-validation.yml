@@ -37,6 +37,8 @@ jobs:
       CHATAPP_TEST_MEMBER_PASSWORD: ${{ secrets.CHATAPP_TEST_MEMBER_PASSWORD }}
       CHATAPP_TEST_OUTSIDER_EMAIL: ${{ secrets.CHATAPP_TEST_OUTSIDER_EMAIL }}
       CHATAPP_TEST_OUTSIDER_PASSWORD: ${{ secrets.CHATAPP_TEST_OUTSIDER_PASSWORD }}
+      CHATAPP_TEST_SUPERADMIN_EMAIL: ${{ secrets.CHATAPP_TEST_SUPERADMIN_EMAIL }}
+      CHATAPP_TEST_SUPERADMIN_PASSWORD: ${{ secrets.CHATAPP_TEST_SUPERADMIN_PASSWORD }}
       CHATAPP_SOAK_SECONDS: ${{ inputs.soak_seconds }}
     steps:
       - name: Checkout
@@ -60,6 +62,8 @@ jobs:
           test -n "$CHATAPP_TEST_MEMBER_PASSWORD"
           test -n "$CHATAPP_TEST_OUTSIDER_EMAIL"
           test -n "$CHATAPP_TEST_OUTSIDER_PASSWORD"
+          test -n "$CHATAPP_TEST_SUPERADMIN_EMAIL"
+          test -n "$CHATAPP_TEST_SUPERADMIN_PASSWORD"
           echo "Staging URL and three role-specific test accounts are configured."
 
       - name: Install locked dependencies
@@ -67,5 +71,5 @@ jobs:
           corepack prepare yarn@1.22.22 --activate
           yarn install --frozen-lockfile --non-interactive
 
-      - name: Run authenticated authorization, session and soak checks
+      - name: Run authenticated authorization, SuperAdmin, session and soak checks
         run: node scripts/staging-validation.cjs
