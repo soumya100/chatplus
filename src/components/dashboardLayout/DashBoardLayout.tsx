@@ -36,6 +36,7 @@ const DashboardLayout: FC<DashBoardLayoutProps> = ({
   openAddFriendModal, 
   handleCloseButtonModal,
   initialUnreadCounts = {},
+  isSuperAdmin = false,
   onOpenAvatarModal
 }) => {
   const [openGroupModal, setOpenGroupModal] = useState<boolean>(false)
