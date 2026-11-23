@@ -1,5 +1,5 @@
 "use client"
-import { Camera, MessageCircleCode, UserPlus, Users, Network } from 'lucide-react'
+import { Camera, MessageCircleCode, UserPlus, Users, Network, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { Dispatch, FC, SetStateAction, useState } from 'react'
 import { Avatar, Button, DialogUI, SignOutButton, ThemeToggle } from '@/common'
@@ -17,6 +17,7 @@ interface DashBoardLayoutProps {
   friends: User[],
   openAddFriendModal: boolean,
   initialUnreadCounts?: Record<string, number>,
+  isSuperAdmin?: boolean,
   handleModalStateOpen(): void,
   handleModalStateClose: Dispatch<SetStateAction<boolean>>,
   handleCloseButtonModal(): void,
@@ -65,6 +66,7 @@ const DashboardLayout: FC<DashBoardLayoutProps> = ({
             {/* overview actions */}
             <ul role='list' className='mt-2 space-y-2'>
               <Link href='/dashboard/communities' className='flex gap-3 items-center w-full rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800'><Network size={16} /><span>Communities</span></Link>
+              {isSuperAdmin && <Link href='/dashboard/superadmin' className='flex gap-3 items-center w-full rounded-lg px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-400/10'><ShieldCheck size={16}/><span>SuperAdmin</span></Link>}
               <Button onClick={handleModalStateOpen} className='flex gap-3 items-center w-full justify-start px-3 py-2 text-sm'>
                 <UserPlus size={16} />
                 <span>Add Friend</span>
