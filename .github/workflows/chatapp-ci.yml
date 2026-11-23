@@ -67,7 +67,9 @@ jobs:
         run: yarn lint
 
       - name: Validate staging test script syntax
-        run: node --check scripts/staging-validation.cjs
+        run: |
+          node --check scripts/staging-validation.cjs
+          node --check scripts/staging-accessibility.cjs
 
   redis-lua-integration:
     name: Real Redis Lua integration tests
