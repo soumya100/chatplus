@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 const createSchema = z.object({
   name: z.string().trim().min(2).max(60),
   description: z.string().trim().max(500).optional(),
-  groupIds: z.array(z.string().min(1)).max(50).default([]).refine(ids => new Set(ids).size === ids.length, "A group can only be selected once"),
+  groupIds: z.array(z.string().min(1)).max(20).default([]).refine(ids => new Set(ids).size === ids.length, "A group can only be selected once"),
 })
 
 const atomicCreateCommunity = `
@@ -111,6 +111,7 @@ export async function POST(req: Request) {
     expectedGroups.push(typeof raw === "string" ? raw : JSON.stringify(raw))
     ;(group.memberIds || []).forEach(id => memberIds.add(id))
     memberIds.add(group.creatorId)
+    if (memberIds.size > 2000) return Response.json({ message: "A community can contain up to 2,000 members. Select fewer groups." }, { status: 400 })
   }
 
   const id = nanoid()
