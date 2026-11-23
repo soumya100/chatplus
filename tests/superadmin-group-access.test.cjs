@@ -33,3 +33,17 @@ test("SuperAdmin can access all community records through the normal community h
   assert.equal(listing.data.communities[0].isSuperAdmin, true);
   assert.equal(listing.data.communities[0].isAdmin, true);
 });
+
+
+test("SuperAdmin can delete a community without being its owner", async () => {
+  h.reset();
+  const created = await status(await communities.POST(h.request({ name: "Moderation target" })));
+  const id = created.data.community.id;
+  assert.ok(h.getSetMembers("communities").includes(id));
+  h.setSession("root", "Platform admin", { isSuperAdmin: true });
+  const removed = await status(await h.loadRoute("src/app/api/community/[communityId]/route.ts").POST(
+    h.request({ action: "delete" }), { params: Promise.resolve({ communityId: id }) }
+  ));
+  assert.equal(removed.status, 200);
+  assert.equal(h.getSetMembers("communities").includes(id), false);
+});
