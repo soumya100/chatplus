@@ -50,6 +50,12 @@ redis.call("SET", KEYS[2], ARGV[6], "EX", 86400)
 return { 1, ARGV[2] }
 `
 
+function decodeRedisJson<T>(value: unknown): T {
+    // @upstash/redis automatically deserializes JSON responses by default.
+    // Lua EVAL may therefore return the message as an object, not JSON text.
+    return (typeof value === "string" ? JSON.parse(value) : value) as T
+}
+
 async function persistMessageOnce(options: { senderId: string; chatId: string; requestId: string; fingerprint: string; outboxRecord: string; message: Message; recipientIds: string[] }) {
     const { senderId, chatId, requestId, fingerprint, outboxRecord, message, recipientIds } = options
     const messageKey = `chat:${chatId}:messages`
@@ -60,7 +66,7 @@ async function persistMessageOnce(options: { senderId: string; chatId: string; r
     const deliveryKey = `chat:${chatId}:delivery:outbox`
     const keys = [idempotencyKey, fingerprintKey, messageKey, "chat:expiring", deliveryKey, "media:orphans", ...recipientIds.map(memberId => `user:${memberId}:unread`)]
     const result = await db.eval(atomicPersistMessage, keys, [String(message.timestamp), serializedMessage, expiryRaw, String(message.expiresAt || ""), chatId, fingerprint, outboxRecord, message.mediaUrl || ""]) as [number | string, string]
-    return { created: Number(result[0]) === 1, conflict: Number(result[0]) === -1, message: JSON.parse(result[1]) as Message }
+    return { created: Number(result[0]) === 1, conflict: Number(result[0]) === -1, message: decodeRedisJson<Message>(result[1]) }
 }
 
 async function isValidReplyTarget(chatId: string, replyTo?: { id: string }) {
