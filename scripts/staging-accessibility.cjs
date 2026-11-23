@@ -5,6 +5,7 @@ const axe = require("axe-core");
 const baseUrl = (process.env.CHATAPP_STAGING_URL || "").replace(/\/$/, "");
 const email = process.env.CHATAPP_TEST_SUPERADMIN_EMAIL;
 const password = process.env.CHATAPP_TEST_SUPERADMIN_PASSWORD;
+const communityId = process.env.CHATAPP_TEST_COMMUNITY_ID;
 const tags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 
 async function audit(page, label) {
@@ -33,6 +34,7 @@ async function login(page) {
 async function main() {
   assert.ok(baseUrl, "CHATAPP_STAGING_URL is required");
   assert.ok(email && password, "Dedicated SuperAdmin staging credentials are required");
+  assert.ok(communityId, "CHATAPP_TEST_COMMUNITY_ID must identify a dedicated staging community");
   assert.equal(new URL(baseUrl).protocol, "https:", "Staging accessibility checks require HTTPS");
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -44,10 +46,15 @@ async function main() {
 
     await page.goto(baseUrl + "/dashboard/communities", { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Communities" }).waitFor();
-    await audit(page, "Communities empty/list view (mobile)");
-    const firstCommunity = page.locator("aside button").first();
-    if (await firstCommunity.count()) {
-      await firstCommunity.click();
+    await audit(page, "Communities list view (mobile)");
+    const communityResponse = await page.evaluate(async () => {
+      const response = await fetch("/api/community");
+      if (!response.ok) throw new Error("Community list endpoint returned HTTP " + response.status);
+      return response.json();
+    });
+    const community = (communityResponse.communities || []).find(item => item.id === communityId);
+    assert.ok(community, "Configured staging community must be visible to the SuperAdmin");
+    await page.locator("aside button").filter({ hasText: community.name }).first().click();
       await page.getByRole("button", { name: "Announcements" }).click();
       await audit(page, "Community announcements (mobile)");
       await page.getByRole("button", { name: "Groups" }).click();
