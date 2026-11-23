@@ -67,3 +67,28 @@ test("community: announcements reject invalid and oversized payloads", async () 
   h.setSession("other");
   assert.equal((await postAnnouncement(id, { text: "Unauthorized" })).status, 403);
 });
+
+
+test("community: linking a group atomically syncs all current members and rejects stale writers", async () => {
+  h.reset();
+  const created = await status(await create.POST(h.request({ name: "Workspace", groupIds: ["g1"] })));
+  assert.equal(created.status, 201);
+  const id = created.data.community.id;
+  assert.equal(h.getGroup("g1").communityId, id);
+  for (const memberId of ["owner", "admin", "member", "other"]) {
+    assert.ok(h.getSetMembers(`user:${memberId}:communities`).includes(id));
+  }
+
+  h.reset();
+  h.forceRedisConflicts(1);
+  const conflict = await status(await create.POST(h.request({ name: "Stale workspace" })));
+  assert.equal(conflict.status, 409);
+  assert.equal(h.getSetMembers("communities").length, 0);
+});
+
+test("community: duplicate group selections are rejected before persistence", async () => {
+  h.reset();
+  const response = await status(await create.POST(h.request({ name: "Duplicate links", groupIds: ["g1", "g1"] })));
+  assert.equal(response.status, 400);
+  assert.equal(h.getSetMembers("communities").length, 0);
+});
