@@ -45,7 +45,7 @@ export async function POST(req: Request) {
             if (chatId.startsWith('group--')) {
                 const groupId = chatId.slice('group--'.length)
                 const isMember = await db.sismember(`group:${groupId}:members`, session.user.id)
-                if (!isMember) return new Response('Forbidden', { status: 403 })
+                if (!isMember && !session.user.isSuperAdmin) return new Response('Forbidden', { status: 403 })
                 if (isPresence) presenceGroupId = groupId
             } else {
                 const ids = chatId.split('--')
