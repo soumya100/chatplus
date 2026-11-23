@@ -38,6 +38,7 @@ const Signup: FC<SignupProps> = () => {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [emailVerified, setEmailVerified] = useState(false)
+    const [emailVerificationToken, setEmailVerificationToken] = useState('')
     const [otpOpen, setOtpOpen] = useState(false)
     const [otp, setOtp] = useState('')
     const [otpBusy, setOtpBusy] = useState(false)
@@ -53,6 +54,7 @@ const Signup: FC<SignupProps> = () => {
     function handleEmailChange(value: string) {
         setEmail(value)
         setEmailVerified(false)
+        setEmailVerificationToken('')
         setOtpOpen(false)
         setResendSeconds(0)
         setOtp('')
@@ -76,6 +78,8 @@ const Signup: FC<SignupProps> = () => {
             })
             const data = await response.json()
             if (!response.ok) throw new Error(data.message || 'Unable to send verification code.')
+            if (!/^[a-f0-9]{64}$/.test(data.challengeToken || '')) throw new Error('The verification session could not be started. Please try again.')
+            setEmailVerificationToken(data.challengeToken)
             setOtp('')
             setOtpOpen(true)
             setResendSeconds(60)
@@ -99,7 +103,7 @@ const Signup: FC<SignupProps> = () => {
             const response = await fetch('/api/auth/email-otp/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email.trim().toLowerCase(), code: value }),
+                body: JSON.stringify({ email: email.trim().toLowerCase(), code: value, challengeToken: emailVerificationToken }),
             })
             const data = await response.json()
             if (!response.ok) throw new Error(data.message || 'Verification failed.')
@@ -151,7 +155,7 @@ const Signup: FC<SignupProps> = () => {
             return
         }
 
-        if (!emailVerified) {
+        if (!emailVerified || !emailVerificationToken) {
             setErrorMessage('Please verify your email address using the OTP before creating your account.')
             return
         }
@@ -182,6 +186,7 @@ const Signup: FC<SignupProps> = () => {
                     name: name.trim(),
                     email: email.trim().toLowerCase(),
                     password,
+                    emailVerificationToken,
                 }),
             })
 
