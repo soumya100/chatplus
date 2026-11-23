@@ -4,6 +4,24 @@ import { rateLimit } from "@/lib/ratelimit"
 import { createHash, randomBytes } from "crypto"
 
 export const dynamic = "force-dynamic"
+
+const issueResetToken = [
+  "-- issue-password-reset-token-v1",
+  "local previous = redis.call(\"GET\", KEYS[2])",
+  "if previous then redis.call(\"DEL\", \"password-reset:\" .. previous) end",
+  "redis.call(\"SET\", KEYS[1], ARGV[1], \"EX\", ARGV[2])",
+  "redis.call(\"SET\", KEYS[2], ARGV[3], \"EX\", ARGV[2])",
+  "return 1",
+].join("\n")
+
+const cleanupResetToken = [
+  "-- cleanup-password-reset-token-v1",
+  "if redis.call(\"GET\", KEYS[2]) == ARGV[1] then",
+  "  redis.call(\"DEL\", KEYS[1], KEYS[2])",
+  "  return 1",
+  "end",
+  "return 0",
+].join("\n")
 const generic = "If an account matches that email, password reset instructions will be sent shortly."
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 
@@ -46,10 +64,29 @@ export async function POST(req: Request) {
     const token = randomBytes(32).toString("hex")
     const tokenHash = createHash("sha256").update(token).digest("hex")
     const resetKey = `password-reset:${tokenHash}`
-    await db.set(resetKey, JSON.stringify({ userId, emailHash, createdAt: Date.now() }), { ex: 1800 })
+    const configuredBaseUrl = process.env.NEXTAUTH_URL
+    if (!configuredBaseUrl) {
+      console.error("[password-reset] NEXTAUTH_URL is not configured")
+      return json({ success: true, message: generic })
+    }
+    let baseUrl: URL
+    try {
+      baseUrl = new URL(configuredBaseUrl)
+      if (baseUrl.username || baseUrl.password ||
+          (process.env.NODE_ENV === "production" && baseUrl.protocol !== "https:")) {
+        throw new Error("Untrusted password reset origin")
+      }
+    } catch {
+      console.error("[password-reset] NEXTAUTH_URL is invalid")
+      return json({ success: true, message: generic })
+    }
 
-    const baseUrl = process.env.NEXTAUTH_URL || new URL(req.url).origin
-    const resetUrl = new URL("/reset-password", baseUrl)
+    const userResetKey = "password-reset:user:" + userId
+    const record = JSON.stringify({ userId, emailHash, createdAt: Date.now() })
+    const issued = await db.eval(issueResetToken, [resetKey, userResetKey], [record, "1800", tokenHash])
+    if (Number(issued) !== 1) return json({ success: true, message: generic })
+
+    const resetUrl = new URL("/reset-password", baseUrl.origin)
     resetUrl.searchParams.set("token", token)
     resetUrl.searchParams.set("email", email)
     const safeName = (user.name || "there").slice(0, 80).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\x27/g, "&#x27;")
@@ -65,7 +102,7 @@ export async function POST(req: Request) {
       }),
     })
     if (!sent.ok) {
-      await db.del(resetKey)
+      await db.eval(cleanupResetToken, [resetKey, userResetKey], [tokenHash])
       console.error("[password-reset] Email provider rejected reset email", sent.status)
       return json({ success: true, message: generic })
     }
