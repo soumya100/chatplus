@@ -60,6 +60,13 @@ export default function WhatsAppCommunities({ groups, sessionId }: Props) {
 
   useEffect(() => { void loadAnnouncements(selectedId) }, [selectedId, loadAnnouncements])
 
+  // Keep the community-wide broadcast feed fresh while the community is open.
+  useEffect(() => {
+    if (!selectedId) return
+    const interval = window.setInterval(() => { void loadAnnouncements(selectedId) }, 15000)
+    return () => window.clearInterval(interval)
+  }, [selectedId, loadAnnouncements])
+
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase()
     return term ? communities.filter(item => item.name.toLowerCase().includes(term) || (item.description || "").toLowerCase().includes(term)) : communities
