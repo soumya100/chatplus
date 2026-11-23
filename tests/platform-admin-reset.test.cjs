@@ -39,8 +39,20 @@ test("password reset: sends a one-time link and atomically changes the password"
     const emailMismatch = await status(await confirmReset.POST(h.request({ email: "someone-else@example.test", token, password: "NewPass456!" })));
     assert.equal(emailMismatch.status, 400, "reset token is bound to the original email address");
 
+    const firstToken = token;
+    const requestedAgain = await status(await requestReset.POST(h.request({ email: "reset@example.test" })));
+    assert.equal(requestedAgain.status, 200);
+    const secondHtml = JSON.parse(emailBody).html;
+    const secondLink = secondHtml.match(/href="([^"]+)"/)[1];
+    const latestToken = new URL(secondLink).searchParams.get("token");
+    assert.ok(latestToken && latestToken !== firstToken, "a new request issues a fresh token");
+    const staleToken = await status(await confirmReset.POST(h.request({
+      email: "reset@example.test", token: firstToken, password: "NewPass456!",
+    })));
+    assert.equal(staleToken.status, 400, "a newer request invalidates the previous reset link");
+
     const changed = await status(await confirmReset.POST(h.request({
-      email: "reset@example.test", token, password: "NewPass456!",
+      email: "reset@example.test", token: latestToken, password: "NewPass456!",
     })));
     assert.equal(changed.status, 200);
     const updated = JSON.parse(h.getKv("user:reset-user"));
@@ -49,7 +61,7 @@ test("password reset: sends a one-time link and atomically changes the password"
     assert.ok(!(await bcrypt.compare("OldPass123!", updated.password)));
 
     const replay = await status(await confirmReset.POST(h.request({
-      email: "reset@example.test", token, password: "OtherPass789!",
+      email: "reset@example.test", token: latestToken, password: "OtherPass789!",
     })));
     assert.equal(replay.status, 400, "reset tokens are single-use");
   } finally {
