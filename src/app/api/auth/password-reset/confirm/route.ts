@@ -20,10 +20,12 @@ const consumeResetToken = `
 -- consume-password-reset-token-v1
 local resetRaw = redis.call("GET", KEYS[1])
 if not resetRaw or resetRaw ~= ARGV[1] then return 0 end
+local latest = redis.call("GET", KEYS[3])
+if latest ~= ARGV[4] then return 0 end
 local userRaw = redis.call("GET", KEYS[2])
 if not userRaw or userRaw ~= ARGV[2] then return -1 end
 redis.call("SET", KEYS[2], ARGV[3])
-redis.call("DEL", KEYS[1])
+redis.call("DEL", KEYS[1], KEYS[3])
 return 1
 `
 
@@ -61,10 +63,12 @@ export async function POST(req: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 12)
     const updatedUser = { ...user, password: hashedPassword, passwordChangedAt: Date.now() }
-    const result = await db.eval(consumeResetToken, [resetKey, userKey], [
+    const latestResetKey = "password-reset:user:" + record.userId
+    const result = await db.eval(consumeResetToken, [resetKey, userKey, latestResetKey], [
       resetRaw,
       userRaw,
       JSON.stringify(updatedUser),
+      tokenHash,
     ])
     if (Number(result) === -1) return Response.json({ message: "Your account changed while resetting. Request a new link." }, { status: 409 })
     if (Number(result) !== 1) return Response.json({ message: "This reset link has already been used. Request a new one." }, { status: 400 })
