@@ -30,8 +30,23 @@ export async function GET() {
     } catch {}
   })
   const communities = (ids || []).flatMap(id => byId.has(id) ? [{ ...byId.get(id), isAdmin: (byId.get(id).adminIds || [byId.get(id).ownerId]).includes(userId), isOwner: byId.get(id).ownerId === userId }] : [])
+  const memberIds = Array.from(new Set(communities.flatMap(community => community.memberIds || [])))
+  const memberPipeline = db.pipeline()
+  memberIds.forEach(id => memberPipeline.get(`user:${id}`))
+  const memberRows = memberIds.length ? await memberPipeline.exec() : []
+  const memberMap = new Map<string, { id: string; name: string; image: string }>()
+  memberRows.forEach((raw, index) => {
+    try {
+      const user = typeof raw === "string" ? JSON.parse(raw) : raw
+      if (user?.id === memberIds[index]) memberMap.set(user.id, { id: user.id, name: user.name || "Chat+ member", image: user.image || "" })
+    } catch {}
+  })
+  const enrichedCommunities = communities.map(community => ({
+    ...community,
+    members: (community.memberIds || []).map(id => memberMap.get(id)).filter(Boolean),
+  }))
   const invites = (inviteIds || []).flatMap(id => byId.has(id) ? [byId.get(id)] : [])
-  return Response.json({ communities, invites })
+  return Response.json({ communities: enrichedCommunities, invites })
 }
 
 export async function POST(req: Request) {
@@ -59,7 +74,8 @@ export async function POST(req: Request) {
   const members = Array.from(memberIds)
   const community = { id, name, description: description || "", ownerId: userId, adminIds: [userId], memberIds: members, groupIds, createdAt: Date.now(), updatedAt: Date.now() }
   const pipeline = db.pipeline()
-  pipeline.set(`community:${id}`, JSON.stringify(community))
+  pipeline.set(`community:${id}`, JSON.stringify({ ...community, announcements: [] }))
+  pipeline.sadd("communities", id)
   for (const memberId of members) pipeline.sadd(`user:${memberId}:communities`, id)
   for (const group of groups) {
     pipeline.set(`group:${group.id}`, JSON.stringify({ ...group, communityId: id, updatedAt: Date.now() }))
