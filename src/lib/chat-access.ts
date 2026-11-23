@@ -1,10 +1,11 @@
+import { isSuperAdminEmail } from "@/lib/superadmin"
+
 /** Enforce current chat access before any message read or mutation. */
 type ChatAccessRedis = {
     sismember(key: string, member: string): Promise<number | boolean>
     get?(key: string): Promise<unknown>
 }
 
-import { isSuperAdminEmail } from "@/lib/superadmin"
 
 export async function hasCurrentChatAccess(db: ChatAccessRedis, chatId: string, userId: string): Promise<boolean> {
     if (!userId || !chatId || chatId.length > 256) return false
