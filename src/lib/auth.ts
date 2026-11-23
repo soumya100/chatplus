@@ -110,6 +110,11 @@ export const authOptions: NextAuthOptions = {
     callbacks: {
         async jwt({ token, user }) {
             if (user) {
+                const storedUser = await fetchRedis("get", `user:${user.id}`) as string | User | null
+                if (storedUser) {
+                    const persisted = (typeof storedUser === "string" ? JSON.parse(storedUser) : storedUser) as User
+                    if ((persisted as any)?.suspendedAt) return { ...token, id: "", exp: 0 }
+                }
                 token.id = user.id
                 token.email = user.email
                 token.name = user.name
