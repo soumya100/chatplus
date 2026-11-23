@@ -6,7 +6,31 @@ import { z } from "zod"
 
 export const dynamic = "force-dynamic"
 
-const createSchema = z.object({ name: z.string().trim().min(2).max(60), description: z.string().trim().max(500).optional(), groupIds: z.array(z.string().min(1)).max(50).default([]) })
+const createSchema = z.object({
+  name: z.string().trim().min(2).max(60),
+  description: z.string().trim().max(500).optional(),
+  groupIds: z.array(z.string().min(1)).max(50).default([]).refine(ids => new Set(ids).size === ids.length, "A group can only be selected once"),
+})
+
+const atomicCreateCommunity = `
+-- create-community-cas-v1
+local expectedGroups = cjson.decode(ARGV[2])
+local updatedGroups = cjson.decode(ARGV[3])
+for index, expected in ipairs(expectedGroups) do
+  if redis.call("GET", KEYS[2 + index]) ~= expected then return 0 end
+end
+redis.call("SET", KEYS[1], ARGV[1])
+local community = cjson.decode(ARGV[1])
+redis.call("SADD", KEYS[2], community.id)
+for index, updated in ipairs(updatedGroups) do
+  redis.call("SET", KEYS[2 + index], updated)
+end
+local memberIds = cjson.decode(ARGV[4])
+for index, memberId in ipairs(memberIds) do
+  redis.call("SADD", KEYS[2 + #updatedGroups + index], community.id)
+end
+return 1
+`;
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -74,6 +98,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return Response.json({ message: parsed.error.issues[0]?.message || "Invalid community" }, { status: 400 })
   const { name, description, groupIds } = parsed.data
   const groups: Group[] = []
+  const expectedGroups: string[] = []
   const memberIds = new Set<string>([userId])
 
   for (const id of groupIds) {
@@ -83,20 +108,31 @@ export async function POST(req: Request) {
     if (!(group.adminIds || [group.creatorId]).includes(userId) && !isSuperAdmin) return Response.json({ message: "Only admins of every selected group can add it to a community" }, { status: 403 })
     if (group.communityId) return Response.json({ message: "A selected group already belongs to a community. Remove it there before creating this community." }, { status: 409 })
     groups.push(group)
+    expectedGroups.push(typeof raw === "string" ? raw : JSON.stringify(raw))
     ;(group.memberIds || []).forEach(id => memberIds.add(id))
     memberIds.add(group.creatorId)
   }
 
   const id = nanoid()
   const members = Array.from(memberIds)
-  const community = { id, name, description: description || "", ownerId: userId, adminIds: [userId], memberIds: members, groupIds, createdAt: Date.now(), updatedAt: Date.now() }
-  const pipeline = db.pipeline()
-  pipeline.set(`community:${id}`, JSON.stringify({ ...community, announcements: [] }))
-  pipeline.sadd("communities", id)
-  for (const memberId of members) pipeline.sadd(`user:${memberId}:communities`, id)
-  for (const group of groups) {
-    pipeline.set(`group:${group.id}`, JSON.stringify({ ...group, communityId: id, updatedAt: Date.now() }))
+  const community = {
+    id, name, description: description || "", ownerId: userId, adminIds: [userId],
+    memberIds: members, groupIds, announcements: [], createdAt: Date.now(), updatedAt: Date.now(),
   }
-  await pipeline.exec()
+  const updatedGroups = groups.map(group => JSON.stringify({ ...group, communityId: id, updatedAt: Date.now() }))
+  const keys = [
+    `community:${id}`, "communities",
+    ...groupIds.map(groupId => `group:${groupId}`),
+    ...members.map(memberId => `user:${memberId}:communities`),
+  ]
+  const committed = await db.eval(atomicCreateCommunity, keys, [
+    JSON.stringify(community),
+    JSON.stringify(expectedGroups),
+    JSON.stringify(updatedGroups),
+    JSON.stringify(members),
+  ])
+  if (Number(committed) !== 1) {
+    return Response.json({ message: "A selected group changed while the community was being created. Refresh and try again." }, { status: 409 })
+  }
   return Response.json({ success: true, community }, { status: 201 })
 }
