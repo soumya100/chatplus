@@ -105,6 +105,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         if (parsed.data.name !== undefined) next.name = parsed.data.name
         if (parsed.data.description !== undefined) next.description = parsed.data.description
       } else if (parsed.data.action === "addGroup") {
+        if ((next.groupIds || []).length >= 20) return Response.json({ message: "A community can contain up to 20 groups" }, { status: 400 })
         const groupId = parsed.data.groupId
         const groupKey = `group:${groupId}`
         const groupRaw = await db.get(groupKey)
