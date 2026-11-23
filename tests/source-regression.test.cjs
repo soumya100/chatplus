@@ -260,3 +260,12 @@ test("chat search uses debounced server-side history results and cancels stale r
   assert.match(search, /zrange\(\`chat:\$\{chatId\}:messages\`, -500, -1\)/);
   assert.match(search, /results\.slice\(0, 50\)/);
 });
+
+
+test("message persistence accepts both Upstash auto-deserialized objects and raw JSON strings", () => {
+  const source = read("src/app/api/message/send/route.ts");
+  assert.match(source, /function decodeRedisJson<T>\(value: unknown\): T/);
+  assert.match(source, /typeof value === "string" \? JSON\.parse\(value\) : value/);
+  assert.match(source, /decodeRedisJson<Message>\(result\[1\]\)/);
+  assert.doesNotMatch(source, /message:\s*JSON\.parse\(result\[1\]\)/);
+});
