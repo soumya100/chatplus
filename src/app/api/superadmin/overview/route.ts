@@ -97,6 +97,8 @@ local current = redis.call("GET", KEYS[1])
 if not current or current ~= ARGV[1] then return 0 end
 redis.call("SET", KEYS[1], ARGV[2])
 redis.call("SET", KEYS[2], ARGV[3], "EX", ARGV[4])
+redis.call("ZADD", KEYS[3], tonumber(ARGV[5]), ARGV[6])
+redis.call("ZREMRANGEBYSCORE", KEYS[3], "-inf", tonumber(ARGV[5]) - 15552000)
 return 1
 `
 
@@ -133,8 +135,8 @@ export async function PATCH(req: Request) {
       const auditRecord = JSON.stringify({
         actorId: actor.id, actorEmail: actor.email, action, targetUserId: userId, timestamp: now,
       })
-      const committed = await db.eval(atomicUserModeration, [key, auditKey], [
-        expected, JSON.stringify(user), auditRecord, String(60 * 60 * 24 * 180),
+      const committed = await db.eval(atomicUserModeration, [key, auditKey, "superadmin:audit:index"], [
+        expected, JSON.stringify(user), auditRecord, String(60 * 60 * 24 * 180), String(now), auditKey,
       ])
       if (Number(committed) === 1) {
         moderatedUser = user
