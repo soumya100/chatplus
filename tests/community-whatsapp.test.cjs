@@ -28,7 +28,7 @@ test("community: only admins post announcements; members can read them", async (
   h.reset();
   const created = await status(await create.POST(h.request({ name: "Product" })));
   const id = created.data.community.id;
-  assert.equal((await postCommunity(id, { action: "inviteMember", memberId: "member" })).status, 200);
+  assert.equal((await postCommunity(id, { action: "addMember", memberId: "member" })).status, 200);
 
   h.setSession("member");
   assert.equal((await postAnnouncement(id, { text: "Release notes" })).status, 403);
