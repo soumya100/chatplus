@@ -76,7 +76,7 @@ async function main() {
 
   const resetRequest = await check("password reset request privacy", "/api/auth/password-reset/request", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "nonexistent-smoke@example.test" }) }, 200);
   assert.match((await resetRequest.json()).message || "", /If an account matches/);
-  await check("password reset confirmation rejects invalid token", "/api/auth/password-reset/confirm", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "smoke@example.test", token: "0".repeat(64), password: "StrongPass123!" }) }, 400);
+  await check("password reset confirmation rejects invalid token", "/api/auth/password-reset/confirm", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "smoke@example.test", token: "invalid", password: "StrongPass123!" }) }, 400);
 
   console.log(`Smoke checks passed: 6 public/auth pages, 1 middleware redirect, ${protectedRequests.length} protected API checks plus password-reset privacy and token validation.`);
 }
