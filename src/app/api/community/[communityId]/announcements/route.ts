@@ -37,6 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
   const { communityId } = await params
   const session = await getServerSession(authOptions)
   const userId = session?.user?.id
+  const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
   if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
   const parsed = schema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return Response.json({ message: "Announcement must contain 1–2000 characters" }, { status: 400 })
