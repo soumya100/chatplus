@@ -1,7 +1,7 @@
 'use client'
 import { FC, Fragment, useEffect, useState } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
-import { Camera, Menu, MessageCircleCode, UserPlus, X } from 'lucide-react'
+import { Camera, Menu, MessageCircleCode, UserPlus, X, Network, ShieldCheck } from 'lucide-react'
 import Link from 'next/link';
 import Button, { buttonVariants } from '../Button';
 import SignOutButton from '../SignoutButton';
@@ -20,11 +20,12 @@ interface MobileChatLayoutProps {
   handleModalStateOpen(): void,
   openAddFriendModal: boolean,
   initialUnreadCounts?: Record<string, number>,
+  isSuperAdmin?: boolean,
   onOpenAvatarModal?: () => void
 }
 
 const MobileChatLayout: FC<MobileChatLayoutProps> = ({friends,profileEmail, profileImage, profileName, 
-  sessionId, unseenFriendRequests, handleModalStateOpen,openAddFriendModal, initialUnreadCounts = {}, onOpenAvatarModal }) => {
+  sessionId, unseenFriendRequests, handleModalStateOpen,openAddFriendModal, initialUnreadCounts = {}, isSuperAdmin = false, onOpenAvatarModal }) => {
   const [open, setOpen] = useState<boolean>(false);
 
   useEffect(()=>{
@@ -112,8 +113,10 @@ const MobileChatLayout: FC<MobileChatLayoutProps> = ({friends,profileEmail, prof
                               Overview
                             </div>
 
-                            {/* add friend button */}
+                            {/* navigation actions */}
                             <ul role='list' className='mt-2 space-y-1'>
+                              <li><Link href="/dashboard/communities" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"><Network size={15}/> Communities</Link></li>
+                              {isSuperAdmin && <li><Link href="/dashboard/superadmin" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"><ShieldCheck size={15}/> SuperAdmin</Link></li> }
                               <Button onClick={handleModalStateOpen} className='flex gap-4 items-center w-full'>
                                 <UserPlus size={15} />
                                 <p>
