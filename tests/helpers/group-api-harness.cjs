@@ -373,6 +373,24 @@ const db = {
   async zrange(key, start, end, options) { return zrange(key, start, end, options); },
   async eval(script, keys, args) {
     if (scriptRaceHook) scriptRaceHook(script, keys, args);
+    if (script.includes("create-community-cas-v1")) {
+      const expectedGroups = JSON.parse(args[1]);
+      const updatedGroups = JSON.parse(args[2]);
+      const memberIds = JSON.parse(args[3]);
+      for (let index = 0; index < expectedGroups.length; index += 1) {
+        if (readRaw(keys[2 + index]) !== expectedGroups[index]) return 0;
+      }
+      const community = JSON.parse(args[0]);
+      writeRaw(keys[0], args[0]);
+      sadd(keys[1], community.id);
+      for (let index = 0; index < updatedGroups.length; index += 1) {
+        writeRaw(keys[2 + index], updatedGroups[index]);
+      }
+      for (let index = 0; index < memberIds.length; index += 1) {
+        sadd(keys[2 + updatedGroups.length + index], community.id);
+      }
+      return 1;
+    }
     if (script.includes("community-announcement-cas-v1")) {
       const current = readRaw(keys[0]);
       if (!current || current !== args[0]) return 0;
