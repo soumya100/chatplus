@@ -59,3 +59,25 @@ test("SuperAdmin can create a group in a community and is indexed as a member fo
   assert.ok(h.getSetMembers("user:root:communities").includes(communityId));
   assert.ok(h.getSetMembers("user:root:groups").includes(response.data.group.id));
 });
+
+
+test("deleting the final-member group removes its link from the community atomically", async () => {
+  h.reset();
+  const created = await status(await createCommunity.POST(h.request({ name: "Lifecycle", groupIds: ["g1"] })));
+  const communityId = created.data.community.id;
+  const createdGroup = await status(await createGroup.POST(
+    h.request({ name: "Temporary group", memberIds: [] }),
+    { params: Promise.resolve({ communityId }) }
+  ));
+  const groupId = createdGroup.data.group.id;
+  const manage = h.loadRoute("src/app/api/group/[groupId]/manage/route.ts");
+  const deleted = await status(await manage.POST(
+    h.request({ action: "leave" }),
+    { params: Promise.resolve({ groupId }) }
+  ));
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.data.deleted, true);
+  const community = JSON.parse(h.getKv("community:" + communityId));
+  assert.equal(community.groupIds.includes(groupId), false);
+  assert.equal(h.getSetMembers("groups").includes(groupId), false);
+});
