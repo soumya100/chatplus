@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const bcrypt = require("bcryptjs");
+const { createHash } = require("crypto");
 const h = require("./helpers/group-api-harness.cjs");
 
 const register = h.loadRoute("src/app/api/auth/register/route.ts");
@@ -10,10 +11,15 @@ const avatar = h.loadRoute("src/app/api/user/avatar/route.ts");
 const upload = h.loadRoute("src/app/api/upload/route.ts");
 
 const status = async response => ({ status: response.status, data: response.headers.get("content-type")?.includes("json") ? await h.body(response) : await response.text(), headers: response.headers });
+const verifyEmailForTest = email => {
+  const key = createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+  h.seedKv(`signup:verified:${key}`, "1");
+};
 
 // ------------------------------------------------------------------ register
 test("register: creates an account with a hashed password, indexes and a sanitized response", async () => {
   h.reset();
+  verifyEmailForTest("alice@example.test");
   const result = await status(await register.POST(h.request({
     name: "Alice <b>Smith</b>", email: "Alice@Example.test", password: "Sup3rSecret!",
   })));
@@ -54,11 +60,13 @@ test("register: duplicate email returns 409 and weak payloads return 400", async
 test("register: IP-based sliding window allows 5 attempts per minute", async () => {
   h.reset();
   for (let i = 0; i < 5; i++) {
+    verifyEmailForTest(`alice-${i}@example.test`);
     const attempt = await status(await register.POST(h.request({
       name: "Alice", email: `alice-${i}@example.test`, password: "Sup3rSecret!",
     })));
     assert.equal(attempt.status, 201, `attempt ${i + 1} should succeed`);
   }
+  verifyEmailForTest("alice-6@example.test");
   const blocked = await status(await register.POST(h.request({
     name: "Alice", email: "alice-6@example.test", password: "Sup3rSecret!",
   })));
