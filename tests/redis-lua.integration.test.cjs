@@ -297,15 +297,18 @@ test("Redis Lua integration: password reset token consumption is atomic and sing
   const resetRecord = JSON.stringify({ userId: "u1", emailHash: "email-hash", createdAt: 100 });
   const oldUser = JSON.stringify({ id: "u1", email: "u1@example.test", password: "old-hash" });
   const updatedUser = JSON.stringify({ id: "u1", email: "u1@example.test", password: "new-hash", passwordChangedAt: 200 });
+  const latestKey = "password-reset:user:u1";
   await redis(["SET", tokenKey, resetRecord, "EX", "1800"]);
+  await redis(["SET", latestKey, "token-hash", "EX", "1800"]);
   await redis(["SET", userKey, oldUser]);
 
-  const consumed = await evalLua(script, [tokenKey, userKey], [resetRecord, oldUser, updatedUser]);
+  const consumed = await evalLua(script, [tokenKey, userKey, latestKey], [resetRecord, oldUser, updatedUser, "token-hash"]);
   assert.equal(consumed, "1");
   assert.equal(await redis(["GET", userKey]), updatedUser);
   assert.equal(await redis(["EXISTS", tokenKey]), "0");
+  assert.equal(await redis(["EXISTS", latestKey]), "0");
 
-  const replay = await evalLua(script, [tokenKey, userKey], [resetRecord, updatedUser, oldUser]);
+  const replay = await evalLua(script, [tokenKey, userKey, latestKey], [resetRecord, updatedUser, oldUser, "token-hash"]);
   assert.equal(replay, "0", "a reset token cannot be consumed twice");
 });
 
@@ -346,16 +349,18 @@ test("Redis Lua integration: SuperAdmin account moderation compare-and-set preve
   await redis(["FLUSHDB"]);
   const key = "user:u1";
   const auditKey = "superadmin:audit:moderation";
+  const auditIndex = "superadmin:audit:index";
   const original = JSON.stringify({ id: "u1", email: "u1@example.test", name: "Before", password: "hash" });
   const suspended = JSON.stringify({ id: "u1", email: "u1@example.test", name: "Before", password: "hash", suspendedAt: 123 });
   const staleUpdated = JSON.stringify({ id: "u1", email: "u1@example.test", name: "Stale", password: "hash" });
   await redis(["SET", key, original]);
 
   const audit = JSON.stringify({ actorId: "root", action: "suspend", targetUserId: "u1" });
-  const committed = await evalLua(script, [key, auditKey], [original, suspended, audit, "1800"]);
+  const committed = await evalLua(script, [key, auditKey, auditIndex], [original, suspended, audit, "1800", "123", auditKey]);
   assert.equal(committed, "1");
   assert.equal(await redis(["GET", auditKey]), audit, "the audit event is committed with the account mutation");
-  const stale = await evalLua(script, [key, auditKey], [original, staleUpdated, "stale-audit", "1800"]);
+  assert.equal(await redis(["ZSCORE", auditIndex, auditKey]), "123", "the audit index is committed atomically");
+  const stale = await evalLua(script, [key, auditKey, auditIndex], [original, staleUpdated, "stale-audit", "1800", "124", "stale-audit-key"]);
   assert.equal(stale, "0");
   assert.equal(await redis(["GET", key]), suspended, "stale moderation must not overwrite the committed suspension");
   assert.equal(await redis(["GET", auditKey]), audit, "stale moderation must not overwrite the audit record");
