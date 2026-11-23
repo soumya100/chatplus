@@ -63,6 +63,14 @@ async function auditPage(page, label) {
     await page.getByRole("dialog", { name: /verify your email/i }).waitFor();
     await auditPage(page, "Signup OTP dialog");
 
+    await page.goto(baseUrl + "/forgot-password", { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: /forgot your password/i }).waitFor();
+    await auditPage(page, "Forgot password");
+
+    await page.goto(baseUrl + "/reset-password?token=invalid&email=a11y%40example.test", { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: /choose a new password/i }).waitFor();
+    await auditPage(page, "Invalid reset-link recovery state");
+
     assert.deepEqual(pageErrors, [], "Accessibility journeys must not trigger uncaught browser errors");
   } finally {
     await browser.close();
