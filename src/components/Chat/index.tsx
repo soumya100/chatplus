@@ -183,6 +183,7 @@ const Chat: FC<ChatProps> = ({
   }, [chatId, sessionId, chatPartner.id, flushOfflineQueue])
 
   useEffect(() => {
+    const typingTimeouts = typingTimeoutsRef.current
     setTypingUserIds([])
     // 1. Presence channel for tracking active partner in chat room
     const presenceChannelKey = toPusherKey(`presence-chat:${chatId}`)
@@ -272,8 +273,8 @@ const Chat: FC<ChatProps> = ({
       privateChannel.unbind('group_members_updated', groupMembersUpdatedHandler)
       userGroupsChannel?.unbind('group_removed', groupRemovedHandler)
       if (userGroupsChannelKey) pusherClient.unsubscribe(userGroupsChannelKey)
-      typingTimeoutsRef.current.forEach(timeout => clearTimeout(timeout))
-      typingTimeoutsRef.current.clear()
+      typingTimeouts.forEach(timeout => clearTimeout(timeout))
+      typingTimeouts.clear()
     }
   }, [chatId, chatPartner.id, groupId, isGroupChat, router, sessionId])
 
