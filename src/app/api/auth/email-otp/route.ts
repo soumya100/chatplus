@@ -1,7 +1,7 @@
 import { db } from "@/lib/db"
 import { fetchRedis } from "@/helpers/redis"
 import { rateLimit } from "@/lib/ratelimit"
-import { createHash, randomInt } from "crypto"
+import { createHash, randomBytes, randomInt } from "crypto"
 
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 const normalizeEmail = (value: unknown) => typeof value === "string" ? value.trim().toLowerCase() : ""
@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     }
 
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0")
+    const challengeToken = randomBytes(32).toString("hex")
     const codeHash = createHash("sha256").update(`${email}:${code}:${process.env.NEXTAUTH_SECRET || ""}`).digest("hex")
 
 
@@ -52,9 +53,9 @@ export async function POST(req: Request) {
       await db.del(cooldownKey)
       return json({ message: "We couldn't send the verification email. Please try again shortly." }, 502)
     }
-    await db.set(`signup:otp:${emailKey}`, JSON.stringify({ hash: codeHash, attempts: 0, createdAt: Date.now() }), { ex: 600 })
+    await db.set(`signup:otp:${emailKey}`, JSON.stringify({ hash: codeHash, challengeToken, attempts: 0, createdAt: Date.now() }), { ex: 600 })
     await db.del(`signup:verified:${emailKey}`)
-    return json({ success: true, message: "Verification code sent. Check your inbox and spam folder." })
+    return json({ success: true, challengeToken, message: "Verification code sent. Check your inbox and spam folder." })
   } catch (error) {
     console.error("[email-otp] send failed", error)
     return json({ message: "Unable to send a verification code right now." }, 500)
