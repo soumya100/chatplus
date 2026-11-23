@@ -12,9 +12,9 @@ export default async function CommunitiesPage() {
   let ids = (session.user.isSuperAdmin ? await db.smembers("groups") : await db.smembers(`user:${session.user.id}:groups`)) as string[]
   if (session.user.isSuperAdmin) {
     const users = await db.smembers("users") as string[]
-    const pipeline = db.pipeline()
-    ;(users || []).forEach(id => pipeline.smembers(`user:${id}:groups`))
-    const indexes = users?.length ? await pipeline.exec() : []
+    const indexes = users?.length
+      ? await Promise.all(users.map(id => db.smembers(`user:${id}:groups`)))
+      : []
     ids = Array.from(new Set([...(ids || []), ...indexes.flatMap(value => Array.isArray(value) ? value.map(String) : [])]))
   }
   const groups: Group[] = []
