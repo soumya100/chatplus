@@ -636,6 +636,9 @@ test("member invitation gives up with 409 when the community document keeps chan
 test("member addition compares the exact raw Redis document when the Redis client auto-deserializes GET", async () => {
   h.reset();
   const originalGet = h.db.get;
+  const originalRaw = await originalGet("group:g1");
+  await h.db.set("group:g1", JSON.stringify(JSON.parse(originalRaw), null, 2));
+  h.setUser("new-member", { name: "New member" });
   h.db.get = async key => {
     const value = await originalGet(key);
     if ((key.startsWith("group:") && !key.endsWith(":members")) || key.startsWith("community:")) {
@@ -644,9 +647,10 @@ test("member addition compares the exact raw Redis document when the Redis clien
     return value;
   };
   try {
-    const result = await read(await post(addMembers, { groupId: "g1", memberIds: ["other-new"] }));
-    assert.equal(result.status, 404, "unknown user should be rejected after the raw group comparison succeeds");
-    assert.equal(result.data.message, "No valid users were selected");
+    const result = await read(await post(addMembers, { groupId: "g1", memberIds: ["new-member"] }));
+    assert.equal(result.status, 200, "member addition must succeed even when GET auto-deserializes a non-canonical JSON document");
+    assert.equal(result.data.addedCount, 1);
+    assert.ok(result.data.group.memberIds.includes("new-member"));
   } finally {
     h.db.get = originalGet;
   }
