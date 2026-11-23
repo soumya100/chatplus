@@ -398,6 +398,12 @@ const db = {
       writeRaw(keys[0], args[1]);
       return 1;
     }
+    if (script.includes("superadmin-user-moderation-cas-v1")) {
+      const current = readRaw(keys[0]);
+      if (!current || current !== args[0]) return 0;
+      writeRaw(keys[0], args[1]);
+      return 1;
+    }
     if (script.includes("consume-password-reset-token-v1")) {
       const resetRaw = readRaw(keys[0]);
       if (!resetRaw || resetRaw !== args[0]) return 0;
