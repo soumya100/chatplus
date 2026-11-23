@@ -242,7 +242,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ groupId
     const rawGroup = await db.get(`group:${groupId}`)
     if (!rawGroup) return Response.json({ message: "Group not found" }, { status: 404 })
     const group = (typeof rawGroup === "string" ? JSON.parse(rawGroup) : rawGroup) as Group
-    if (!(group.memberIds || []).includes(userId)) return Response.json({ message: "Not a group member" }, { status: 403 })
+    if (!(group.memberIds || []).includes(userId) && !isSuperAdmin) return Response.json({ message: "Not a group member" }, { status: 403 })
     const raw = await db.get(`group:${groupId}:features`)
     const features = (typeof raw === "string" ? JSON.parse(raw) : raw) || { polls: [], events: [], announcements: [] }
     features.polls = (features.polls || []).map((poll: any) => ({
