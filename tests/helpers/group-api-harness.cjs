@@ -422,13 +422,30 @@ const db = {
       zremrangebyscore(keys[2], "-inf", Number(args[4]) - 15552000);
       return 1;
     }
-    if (script.includes("consume-password-reset-token-v1")) {
+if (script.includes("issue-password-reset-token-v1")) {
+      const previous = readRaw(keys[1]);
+      if (previous) deleteRaw("password-reset:" + previous);
+      writeRaw(keys[0], args[0]);
+      applyExpire(keys[0], Number(args[1]));
+      writeRaw(keys[1], args[2]);
+      applyExpire(keys[1], Number(args[1]));
+      return 1;
+    }
+    if (script.includes("cleanup-password-reset-token-v1")) {
+      if (readRaw(keys[1]) !== args[0]) return 0;
+      deleteRaw(keys[0]);
+      deleteRaw(keys[1]);
+      return 1;
+    }
+        if (script.includes("consume-password-reset-token-v1")) {
       const resetRaw = readRaw(keys[0]);
       if (!resetRaw || resetRaw !== args[0]) return 0;
+      if (readRaw(keys[2]) !== args[3]) return 0;
       const userRaw = readRaw(keys[1]);
       if (!userRaw || userRaw !== args[1]) return -1;
       writeRaw(keys[1], args[2]);
       deleteRaw(keys[0]);
+      deleteRaw(keys[2]);
       return 1;
     }
     if (script.includes("sliding-window-rate-limit-v1")) {
