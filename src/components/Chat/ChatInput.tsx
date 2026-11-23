@@ -274,7 +274,7 @@ const ChatInput: FC<ChatInputProps> = ({
   }
 
   return (
-    <div className='border-t border-gray-200 dark:border-zinc-800 px-4 pt-3 mb-2 sm:mb-0' aria-busy={isLoading}>
+    <div className='shrink-0 border-t border-gray-200 dark:border-zinc-800 px-4 py-3 bg-white/90 dark:bg-zinc-900/90' aria-busy={isLoading}>
       {isLoading && <p role='status' aria-live='polite' className='mb-2 text-xs text-indigo-600 dark:text-indigo-400'>Sending message… Your draft will remain here if sending fails.</p>}
 
       {/* Pending attachment preview */}
@@ -390,7 +390,7 @@ const ChatInput: FC<ChatInputProps> = ({
         </div>
       ) : (
         /* Regular Chat Input Bar */
-        <div className='relative flex-1 overflow-hidden rounded-lg shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-zinc-700 focus-within:ring-2 focus-within:ring-indigo-600 dark:bg-zinc-900'>
+        <div className='relative flex-1 overflow-hidden rounded-2xl shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-zinc-700 focus-within:ring-2 focus-within:ring-indigo-600 dark:bg-zinc-900'>
           <TextareaAutosize
             autoFocus
             onKeyDown={enterPress}
@@ -403,12 +403,6 @@ const ChatInput: FC<ChatInputProps> = ({
             aria-label={`Message ${chatPartner}`}
             className='block w-full h-full resize-none border-0 bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:ring-0 sm:py-2 sm:leading-6 sm:text-sm pl-3 pr-32'
           />
-
-          <div className='py-1' aria-hidden>
-            <div className='py-px'>
-              <div className='h-8' />
-            </div>
-          </div>
 
           <div className='absolute right-2 bottom-1.5 flex items-center gap-0.5 sm:gap-1'>
             {/* Hidden File Input */}
