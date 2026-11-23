@@ -7,6 +7,7 @@ import toast from "react-hot-toast"
 import { Activity, Ban, CheckCircle2, RefreshCw, Search, ShieldCheck, Users, UsersRound, Network } from "lucide-react"
 
 type AdminUser = { id: string; name: string; email: string; image?: string; createdAt?: number | null; suspendedAt?: number | null; isSuperAdmin: boolean }
+type AuditEvent = { timestamp: number; action: string; actorEmail: string; targetUserId?: string | null }
 type Overview = { stats: { users: number; groups: number; communities: number; suspendedUsers: number }; users: AdminUser[]; groups: {id:string;name:string;memberCount:number;communityId?:string|null}[]; communities: {id:string;name:string;memberCount:number;groupCount:number}[]; pagination: { offset: number; limit: number; total: number } }
 
 export default function SuperAdminDashboard() {
@@ -14,15 +15,23 @@ export default function SuperAdminDashboard() {
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [offset, setOffset] = useState(0)
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
+  const [auditLoading, setAuditLoading] = useState(true)
 
-  const load = useCallback(async (search = "") => {
+  const load = useCallback(async (search = "", pageOffset = 0) => {
     setLoading(true)
     try {
-      const response = await axios.get("/api/superadmin/overview", { params: { q: search, limit: 100 } })
+      const [response, auditResponse] = await Promise.all([
+        axios.get("/api/superadmin/overview", { params: { q: search, limit: 100, offset: pageOffset } }),
+        axios.get("/api/superadmin/audit", { params: { limit: 25 } }),
+      ])
       setData(response.data)
+      setOffset(pageOffset)
+      setAuditEvents(auditResponse.data.events || [])
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Unable to load the SuperAdmin dashboard")
-    } finally { setLoading(false) }
+    } finally { setLoading(false); setAuditLoading(false) }
   }, [])
 
   useEffect(() => { void load("") }, [load])
@@ -33,7 +42,7 @@ export default function SuperAdminDashboard() {
     try {
       await axios.patch("/api/superadmin/overview", { action, userId: user.id })
       toast.success(action === "suspend" ? "Account suspended" : "Account restored")
-      await load(query)
+      await load(query, offset)
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Unable to update account")
     } finally { setBusyId(null) }
@@ -55,9 +64,14 @@ export default function SuperAdminDashboard() {
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map(card => <article key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900"><div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400"><span>{card.label}</span><card.icon size={17}/></div><p className="mt-3 text-3xl font-bold tabular-nums text-slate-900 dark:text-white">{card.value}</p></article>)}
     </section>
+    <div className="flex items-center justify-between rounded-b-2xl border border-t-0 border-slate-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-slate-900"><p className="text-xs text-slate-500">Showing {data?.users.length ? offset + 1 : 0}–{Math.min(offset + (data?.users.length || 0), data?.pagination.total || 0)} of {data?.pagination.total || 0} matching accounts</p><div className="flex gap-2"><button type="button" disabled={loading || offset === 0} onClick={() => void load(query, Math.max(0, offset - 100))} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold disabled:opacity-40 dark:border-white/10">Previous</button><button type="button" disabled={loading || !data || offset + 100 >= data.pagination.total} onClick={() => void load(query, offset + 100)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold disabled:opacity-40 dark:border-white/10">Next</button></div></div>
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4 dark:border-white/10"><div><h2 className="font-semibold text-slate-900 dark:text-white">Account directory</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Search users and suspend or restore non-SuperAdmin accounts.</p></div><form className="flex gap-2" onSubmit={event => {event.preventDefault(); void load(query)}}><label className="relative"><span className="sr-only">Search users</span><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Name or email" className="w-56 max-w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-400 dark:border-white/10 dark:bg-slate-950 dark:text-white"/></label><button className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white">Search</button></form></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4 dark:border-white/10"><div><h2 className="font-semibold text-slate-900 dark:text-white">Account directory</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Search users and suspend or restore non-SuperAdmin accounts.</p></div><form className="flex gap-2" onSubmit={event => {event.preventDefault(); void load(query, 0)}}><label className="relative"><span className="sr-only">Search users</span><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Name or email" className="w-56 max-w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-400 dark:border-white/10 dark:bg-slate-950 dark:text-white"/></label><button className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white">Search</button></form></div>
       {loading ? <div className="p-10 text-center text-sm text-slate-500">Loading accounts…</div> : !data?.users.length ? <div className="p-10 text-center text-sm text-slate-500">No matching accounts found.</div> : <div className="divide-y divide-slate-100 dark:divide-white/5">{data.users.map(user => <article key={user.id} className="flex flex-wrap items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{user.name}</p><p className="truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</p><p className="mt-1 text-[11px] text-slate-400">{user.isSuperAdmin ? "SuperAdmin" : user.suspendedAt ? "Suspended" : "Active"}</p></div>{user.isSuperAdmin ? <span className="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 dark:bg-indigo-400/10 dark:text-indigo-200">Protected account</span> : <button type="button" disabled={busyId === user.id} onClick={() => void moderate(user)} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold disabled:opacity-50 ${user.suspendedAt ? "border-emerald-200 text-emerald-700 dark:border-emerald-400/20 dark:text-emerald-300" : "border-rose-200 text-rose-700 dark:border-rose-400/20 dark:text-rose-300"}`}>{user.suspendedAt ? <CheckCircle2 size={14}/> : <Ban size={14}/>} {user.suspendedAt ? "Restore account" : "Suspend account"}</button>}</article>)}</div>}
+    </section>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900">
+      <div className="border-b border-slate-200 p-4 dark:border-white/10"><h2 className="font-semibold text-slate-900 dark:text-white">Recent administrative activity</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Account moderation actions are recorded with actor and target metadata.</p></div>
+      {auditLoading ? <p className="p-6 text-sm text-slate-500">Loading audit events…</p> : auditEvents.length ? <div className="divide-y divide-slate-100 dark:divide-white/5">{auditEvents.map((event, index) => <article key={event.timestamp + "-" + index} className="flex flex-wrap items-center gap-3 p-3"><div className="min-w-0 flex-1"><p className="text-sm font-medium text-slate-800 dark:text-slate-100">{event.action === "suspend" ? "Account suspended" : event.action === "restore" ? "Account restored" : event.action}</p><p className="mt-0.5 text-xs text-slate-500">{event.actorEmail} · Target: {event.targetUserId || "—"}</p></div><time className="text-[11px] text-slate-400" dateTime={new Date(event.timestamp).toISOString()}>{new Date(event.timestamp).toLocaleString()}</time></article>)}</div> : <p className="p-6 text-sm text-slate-500">No administrative actions have been recorded yet.</p>}
     </section>
     <section className="grid gap-4 xl:grid-cols-2">
       <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900">
