@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import axios from "axios"
+import Link from "next/link"
 import toast from "react-hot-toast"
 import { Activity, Ban, CheckCircle2, RefreshCw, Search, ShieldCheck, Users, UsersRound, Network } from "lucide-react"
 
