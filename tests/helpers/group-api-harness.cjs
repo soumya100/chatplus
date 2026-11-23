@@ -418,6 +418,8 @@ const db = {
       if (!current || current !== args[0]) return 0;
       writeRaw(keys[0], args[1]);
       writeRaw(keys[1], args[2]);
+      zadd(keys[2], { score: Number(args[4]), member: args[5] });
+      zremrangebyscore(keys[2], "-inf", Number(args[4]) - 15552000);
       return 1;
     }
     if (script.includes("consume-password-reset-token-v1")) {
