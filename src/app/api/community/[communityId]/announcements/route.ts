@@ -22,11 +22,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ communi
   const { communityId } = await params
   const session = await getServerSession(authOptions)
   const userId = session?.user?.id
+  const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
   if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
   const raw = await db.get(`community:${communityId}`)
   if (!raw) return Response.json({ message: "Community not found" }, { status: 404 })
   const community = decode<any>(raw)
-  if (!(community.memberIds || []).includes(userId)) return Response.json({ message: "Not a community member" }, { status: 403 })
+  if (!(community.memberIds || []).includes(userId) && !isSuperAdmin) return Response.json({ message: "Not a community member" }, { status: 403 })
   return Response.json({ announcements: (community.announcements || []).slice(-100).reverse() })
 }
 
@@ -45,8 +46,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
     if (!raw) return Response.json({ message: "Community not found" }, { status: 404 })
     const expected = typeof raw === "string" ? raw : JSON.stringify(raw)
     const community = decode<any>(raw)
-    if (!(community.memberIds || []).includes(userId)) return Response.json({ message: "Not a community member" }, { status: 403 })
-    if (!(community.adminIds || [community.ownerId]).includes(userId)) return Response.json({ message: "Only community admins can post announcements" }, { status: 403 })
+    if (!(community.memberIds || []).includes(userId) && !isSuperAdmin) return Response.json({ message: "Not a community member" }, { status: 403 })
+    if (!(community.adminIds || [community.ownerId]).includes(userId) && !isSuperAdmin) return Response.json({ message: "Only community admins can post announcements" }, { status: 403 })
 
     const announcement = {
       id: nanoid(12),
