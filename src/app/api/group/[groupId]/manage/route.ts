@@ -53,6 +53,7 @@ if deleteGroup then
   redis.call("ZREMRANGEBYRANK", KEYS[4], 0, -1)
   redis.call("DEL", KEYS[4])
   redis.call("SREM", KEYS[3], groupId)
+  redis.call("SREM", KEYS[#KEYS], groupId)
   return 1
 end
 
@@ -200,7 +201,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
             } : null
 
             const redisKeys = [groupKey, membersKey, userGroupsKey, messagesKey, featuresKey,
-                ...removedIds.map(id => `user:${id}:groups`)]
+                ...removedIds.map(id => `user:${id}:groups`), "groups"]
             const result = await db.eval(atomicGroupMutation,
                 redisKeys,
                 [
