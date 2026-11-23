@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const ip = (req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown").split(",")[0].trim()
     const [ipLimit, emailLimit] = await Promise.all([
       rateLimit(ip, "email-otp", { limit: 5, windowSeconds: 3600 }),
-      rateLimit(email, "email-otp", { limit: 3, windowSeconds: 900 }),
+      rateLimit(createHash("sha256").update(email).digest("hex"), "email-otp", { limit: 3, windowSeconds: 900 }),
     ])
     if (!ipLimit.success || !emailLimit.success) return json({ message: "Too many OTP requests. Please wait before trying again." }, 429)
 
