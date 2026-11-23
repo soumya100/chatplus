@@ -71,5 +71,18 @@ jobs:
           corepack prepare yarn@1.22.22 --activate
           yarn install --frozen-lockfile --non-interactive
 
+      - name: Install pinned browser and accessibility tooling
+        run: |
+          npm install --global playwright@1.65.1 axe-core@4.10.3
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Run authenticated community and SuperAdmin accessibility audit
+        env:
+          NODE_PATH: ${{ runner.temp }}/npm-global/lib/node_modules
+        run: |
+          export NODE_PATH="$(npm root -g)"
+          node scripts/staging-accessibility.cjs
+
       - name: Run authenticated authorization, SuperAdmin, session and soak checks
         run: node scripts/staging-validation.cjs
