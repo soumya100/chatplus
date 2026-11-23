@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 
 const baseUrl = (process.env.CHATAPP_STAGING_URL || "").replace(/\/$/, "");
 const groupId = process.env.CHATAPP_TEST_GROUP_ID;
+const communityId = process.env.CHATAPP_TEST_COMMUNITY_ID;
 const soakSeconds = Math.min(Math.max(Number(process.env.CHATAPP_SOAK_SECONDS || 180), 30), 600);
 
 function required(name) {
@@ -136,6 +137,7 @@ async function main() {
   assert.notEqual(target.hostname, "chatplus-delta.vercel.app", "Refusing to run mutating validation against the known production hostname.");
   assert.equal(process.env.CHATAPP_STAGING_CONFIRMATION, "staging-only", "Set CHATAPP_STAGING_CONFIRMATION=staging-only only after confirming this is an isolated staging deployment.");
   assert.ok(groupId, "Set CHATAPP_TEST_GROUP_ID to a dedicated test group.");
+  assert.ok(communityId, "Set CHATAPP_TEST_COMMUNITY_ID to a dedicated staging community.");
   assert.ok(!/^(main|production)$/i.test(process.env.GITHUB_REF_NAME || ""), "Do not run staging mutation tests from a production branch.");
 
   const accounts = {
@@ -161,6 +163,7 @@ async function main() {
   await expectStatus(accounts.superadmin, `${groupPath}/features`, 200, {}, "SuperAdmin cross-group moderation access");
   await expectStatus(accounts.superadmin, `/api/message/history?chatId=${encodeURIComponent(`group--${groupId}`)}&limit=10`, 200, {}, "SuperAdmin group history moderation access");
   await expectStatus(accounts.superadmin, "/api/community", 200, {}, "SuperAdmin platform-wide community inventory");
+  await expectStatus(accounts.superadmin, `/api/community/${encodeURIComponent(communityId)}/announcements`, 200, {}, "SuperAdmin community announcement moderation access");
 
   const chatId = `group--${groupId}`;
   const requestId = `staging-validation-${Date.now()}-member`;
