@@ -13,15 +13,17 @@ const upload = h.loadRoute("src/app/api/upload/route.ts");
 const status = async response => ({ status: response.status, data: response.headers.get("content-type")?.includes("json") ? await h.body(response) : await response.text(), headers: response.headers });
 const verifyEmailForTest = email => {
   const key = createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
-  h.seedKv(`signup:verified:${key}`, "1");
+  const token = "a".repeat(64);
+  h.seedKv(`signup:verified:${key}:${token}`, "1");
+  return token;
 };
 
 // ------------------------------------------------------------------ register
 test("register: creates an account with a hashed password, indexes and a sanitized response", async () => {
   h.reset();
-  verifyEmailForTest("alice@example.test");
+  const emailVerificationToken = verifyEmailForTest("alice@example.test");
   const result = await status(await register.POST(h.request({
-    name: "Alice <b>Smith</b>", email: "Alice@Example.test", password: "Sup3rSecret!",
+    name: "Alice <b>Smith</b>", email: "Alice@Example.test", password: "Sup3rSecret!", emailVerificationToken,
   })));
   assert.equal(result.status, 201);
   assert.equal(result.data.success, true);
@@ -60,15 +62,15 @@ test("register: duplicate email returns 409 and weak payloads return 400", async
 test("register: IP-based sliding window allows 5 attempts per minute", async () => {
   h.reset();
   for (let i = 0; i < 5; i++) {
-    verifyEmailForTest(`alice-${i}@example.test`);
+    const emailVerificationToken = verifyEmailForTest(`alice-${i}@example.test`);
     const attempt = await status(await register.POST(h.request({
-      name: "Alice", email: `alice-${i}@example.test`, password: "Sup3rSecret!",
+      name: "Alice", email: `alice-${i}@example.test`, password: "Sup3rSecret!", emailVerificationToken,
     })));
     assert.equal(attempt.status, 201, `attempt ${i + 1} should succeed`);
   }
-  verifyEmailForTest("alice-6@example.test");
+  const emailVerificationToken = verifyEmailForTest("alice-6@example.test");
   const blocked = await status(await register.POST(h.request({
-    name: "Alice", email: "alice-6@example.test", password: "Sup3rSecret!",
+    name: "Alice", email: "alice-6@example.test", password: "Sup3rSecret!", emailVerificationToken,
   })));
   assert.equal(blocked.status, 429);
   assert.equal(blocked.headers.get("retry-after"), "60");
