@@ -127,7 +127,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         next.groupIds = Array.from(new Set([...next.groupIds, groupId]))
         const groupMembers = await db.smembers(`group:${groupId}:members`) as string[]
         const linkedMembers = Array.from(new Set([...(groupMembers || []), group.creatorId]))
-        next.memberIds = Array.from(new Set([...next.memberIds, ...linkedMembers]))
+        const combinedMembers = Array.from(new Set([...next.memberIds, ...linkedMembers]))
+        if (combinedMembers.length > 2000) return Response.json({ message: "A community can contain up to 2,000 members" }, { status: 400 })
+        next.memberIds = combinedMembers
         for (const memberId of linkedMembers) ops.push({ type: "sadd", key: `user:${memberId}:communities`, value: communityId })
         ops.push({ type: "casSet", key: groupKey, expected: expectedGroupRaw, value: JSON.stringify({ ...group, communityId: communityId, updatedAt: Date.now() }) })
       } else if (parsed.data.action === "removeGroup") {
@@ -152,6 +154,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         const targetId = await resolveCommunityMemberId(parsed.data.memberId)
         if (!targetId) return Response.json({ message: "No account matches that email address or user ID" }, { status: 404 })
         if (next.memberIds.includes(targetId)) return Response.json({ message: "User is already a community member" }, { status: 409 })
+        if (next.memberIds.length >= 2000) return Response.json({ message: "This community has reached its 2,000 member limit" }, { status: 400 })
         next.memberIds.push(targetId)
         ops.push({ type: "sadd", key: `user:${targetId}:communities`, value: communityId })
         // If this user had a pending invitation, direct admin addition makes
@@ -159,6 +162,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         ops.push({ type: "srem", key: `community:${communityId}:invites`, value: targetId })
         ops.push({ type: "srem", key: `user:${targetId}:community-invites`, value: communityId })
       } else if (parsed.data.action === "acceptInvite") {
+        if (next.memberIds.length >= 2000) return Response.json({ message: "This community has reached its 2,000 member limit" }, { status: 400 })
         next.memberIds = Array.from(new Set([...next.memberIds, userId]))
         ops.push({ type: "srem", key: `community:${communityId}:invites`, value: userId })
         ops.push({ type: "srem", key: `user:${userId}:community-invites`, value: communityId })
