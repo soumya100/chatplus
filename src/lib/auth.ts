@@ -5,6 +5,7 @@ import GoogleProvider from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
 import { db } from "./db"
 import { fetchRedis } from "@/helpers/redis"
+import { isSuperAdminEmail } from "@/lib/superadmin"
 
 // VAPT Timing Attack Mitigation:
 // Constant-time dummy hash used to neutralize timing discrepancies when querying non-existent accounts
@@ -113,6 +114,7 @@ export const authOptions: NextAuthOptions = {
                 token.email = user.email
                 token.name = user.name
                 token.picture = user.image
+                token.isSuperAdmin = isSuperAdminEmail(user.email)
 
                 // Ensure user is indexed in global users set and username search indices
                 db.sadd('users', user.id).catch(() => {})
@@ -154,7 +156,8 @@ export const authOptions: NextAuthOptions = {
                 id: dbUser.id,
                 name: dbUser.name,
                 email: dbUser.email,
-                picture: dbUser.image
+                picture: dbUser.image,
+                isSuperAdmin: isSuperAdminEmail(dbUser.email)
             }
         },
         async session({ session, token }) {
@@ -168,6 +171,7 @@ export const authOptions: NextAuthOptions = {
                 session.user.email = token.email
                 session.user.image = token.picture
                 session.user.name = token.name
+                session.user.isSuperAdmin = Boolean(token.isSuperAdmin)
             }
             return session
         },
