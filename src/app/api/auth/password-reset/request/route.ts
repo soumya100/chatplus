@@ -5,23 +5,23 @@ import { createHash, randomBytes } from "crypto"
 
 export const dynamic = "force-dynamic"
 
-const issueResetToken = [
-  "-- issue-password-reset-token-v1",
-  "local previous = redis.call(\"GET\", KEYS[2])",
-  "if previous then redis.call(\"DEL\", \"password-reset:\" .. previous) end",
-  "redis.call(\"SET\", KEYS[1], ARGV[1], \"EX\", ARGV[2])",
-  "redis.call(\"SET\", KEYS[2], ARGV[3], \"EX\", ARGV[2])",
-  "return 1",
-].join("\n")
+const issueResetToken = `
+-- issue-password-reset-token-v1
+local previous = redis.call("GET", KEYS[2])
+if previous then redis.call("DEL", "password-reset:" .. previous) end
+redis.call("SET", KEYS[1], ARGV[1], "EX", ARGV[2])
+redis.call("SET", KEYS[2], ARGV[3], "EX", ARGV[2])
+return 1
+`
 
-const cleanupResetToken = [
-  "-- cleanup-password-reset-token-v1",
-  "if redis.call(\"GET\", KEYS[2]) == ARGV[1] then",
-  "  redis.call(\"DEL\", KEYS[1], KEYS[2])",
-  "  return 1",
-  "end",
-  "return 0",
-].join("\n")
+const cleanupResetToken = `
+-- cleanup-password-reset-token-v1
+if redis.call("GET", KEYS[2]) == ARGV[1] then
+  redis.call("DEL", KEYS[1], KEYS[2])
+  return 1
+end
+return 0
+`
 const generic = "If an account matches that email, password reset instructions will be sent shortly."
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 
