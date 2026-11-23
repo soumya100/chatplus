@@ -373,6 +373,21 @@ const db = {
   async zrange(key, start, end, options) { return zrange(key, start, end, options); },
   async eval(script, keys, args) {
     if (scriptRaceHook) scriptRaceHook(script, keys, args);
+    if (script.includes("create-community-group-cas-v1")) {
+      if (forcedConflicts > 0) { forcedConflicts -= 1; return 0; }
+      const current = readRaw(keys[0]);
+      if (!current || current !== args[0]) return 0;
+      const members = JSON.parse(args[3]);
+      writeRaw(keys[0], args[1]);
+      writeRaw(keys[1], args[2]);
+      sadd(keys[2], args[4]);
+      for (let index = 0; index < members.length; index += 1) {
+        sadd(keys[3], members[index]);
+        sadd(keys[4 + index], args[4]);
+      }
+      sadd(keys[keys.length - 1], args[5]);
+      return 1;
+    }
     if (script.includes("create-community-cas-v1")) {
       if (forcedConflicts > 0) { forcedConflicts -= 1; return 0; }
       const expectedGroups = JSON.parse(args[1]);
