@@ -49,13 +49,13 @@ test("protected API routes have an explicit authentication boundary", () => {
 
   const resetRequest = read("src/app/api/auth/password-reset/request/route.ts")
   const resetConfirm = read("src/app/api/auth/password-reset/confirm/route.ts")
-  assert.match(resetRequest, /rateLimit/)
-  assert.match(resetRequest, /randomBytes\\(32\\)/)
-  assert.match(resetRequest, /createHash\\("sha256"\\)/)
-  assert.match(resetRequest, /If an account matches/)
-  assert.match(resetConfirm, /token:\\s*z\\.string\\(\\)\\.regex/)
-  assert.match(resetConfirm, /consume-password-reset-token-v1/)
-  assert.match(resetConfirm, /rateLimit/)
+  assert.ok(resetRequest.includes("rateLimit"))
+  assert.ok(resetRequest.includes("randomBytes(32)"))
+  assert.ok(resetRequest.includes('createHash("sha256")'))
+  assert.ok(resetRequest.includes("If an account matches"))
+  assert.ok(resetConfirm.includes("token: z.string().regex"))
+  assert.ok(resetConfirm.includes("consume-password-reset-token-v1"))
+  assert.ok(resetConfirm.includes("rateLimit"))
 });
 
 test("chat mounts the member manager and activity panel instead of only toggling state", () => {
