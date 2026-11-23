@@ -91,6 +91,14 @@ export async function GET(req: Request) {
   }
 }
 
+const atomicUserModeration = `
+-- superadmin-user-moderation-cas-v1
+local current = redis.call("GET", KEYS[1])
+if not current or current ~= ARGV[1] then return 0 end
+redis.call("SET", KEYS[1], ARGV[2])
+return 1
+`
+
 const moderationSchema = z.object({
   action: z.enum(["suspend", "restore"]),
   userId: z.string().trim().min(1).max(128),
@@ -107,22 +115,31 @@ export async function PATCH(req: Request) {
     if (userId === actor.id) return Response.json({ message: "You cannot suspend your own SuperAdmin account" }, { status: 400 })
 
     const key = `user:${userId}`
-    const raw = await db.get(key)
-    if (!raw) return Response.json({ message: "User not found" }, { status: 404 })
-    const user = (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<string, unknown>
-    if (isSuperAdminEmail(typeof user.email === "string" ? user.email : null)) {
-      return Response.json({ message: "SuperAdmin accounts cannot be suspended through user moderation" }, { status: 403 })
+    let moderatedUser: Record<string, unknown> | null = null
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const raw = await db.get(key)
+      if (!raw) return Response.json({ message: "User not found" }, { status: 404 })
+      const expected = typeof raw === "string" ? raw : JSON.stringify(raw)
+      const user = (typeof raw === "string" ? JSON.parse(raw) : raw) as Record<string, unknown>
+      if (isSuperAdminEmail(typeof user.email === "string" ? user.email : null)) {
+        return Response.json({ message: "SuperAdmin accounts cannot be suspended through user moderation" }, { status: 403 })
+      }
+
+      const now = Date.now()
+      if (action === "suspend") user.suspendedAt = now
+      else delete user.suspendedAt
+      const committed = await db.eval(atomicUserModeration, [key], [expected, JSON.stringify(user)])
+      if (Number(committed) === 1) {
+        moderatedUser = user
+        await db.set(`superadmin:audit:${now}:${nanoid(8)}`, JSON.stringify({
+          actorId: actor.id, actorEmail: actor.email, action, targetUserId: userId, timestamp: now,
+        }), { ex: 60 * 60 * 24 * 180 })
+        break
+      }
     }
+    if (!moderatedUser) return Response.json({ message: "Account changed concurrently. Refresh and retry." }, { status: 409)
 
-    const now = Date.now()
-    if (action === "suspend") user.suspendedAt = now
-    else delete user.suspendedAt
-    await db.set(key, JSON.stringify(user))
-    await db.set(`superadmin:audit:${now}:${nanoid(8)}`, JSON.stringify({
-      actorId: actor.id, actorEmail: actor.email, action, targetUserId: userId, timestamp: now,
-    }), { ex: 60 * 60 * 24 * 180 })
-
-    return Response.json({ success: true, action, user: { id: userId, suspendedAt: user.suspendedAt || null } })
+    return Response.json({ success: true, action, user: { id: userId, suspendedAt: moderatedUser.suspendedAt || null } })
   } catch (error) {
     console.error("[superadmin] moderation failed", error)
     return Response.json({ message: "Unable to update account status" }, { status: 500 })
