@@ -9,7 +9,8 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null)
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : ""
     const code = typeof body?.code === "string" ? body.code.replace(/\s/g, "") : ""
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\d{6}$/.test(code)) return json({ message: "Enter the 6-digit code sent to your email." }, 400)
+    const challengeToken = typeof body?.challengeToken === "string" ? body.challengeToken : ""
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\d{6}$/.test(code) || !/^[a-f0-9]{64}$/.test(challengeToken)) return json({ message: "Enter the 6-digit code sent to your email." }, 400)
 
     const ip = (req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown").split(",")[0].trim()
     const emailKey = createHash("sha256").update(email).digest("hex")
@@ -21,11 +22,15 @@ export async function POST(req: Request) {
 
     const raw = await db.get(`signup:otp:${emailKey}`) as string | { hash: string; attempts: number; createdAt: number } | null
     if (!raw) return json({ message: "This code has expired. Request a new one." }, 410)
-    const record = (typeof raw === "string" ? JSON.parse(raw) : raw) as { hash: string; attempts: number; createdAt: number }
+    const record = (typeof raw === "string" ? JSON.parse(raw) : raw) as { hash: string; challengeToken: string; attempts: number; createdAt: number }
     if (!record || Date.now() - record.createdAt > 600_000) {
       await db.del(`signup:otp:${emailKey}`)
       return json({ message: "This code has expired. Request a new one." }, 410)
     }
+    const storedChallenge = Buffer.from(record.challengeToken || "", "hex")
+    const submittedChallenge = Buffer.from(challengeToken, "hex")
+    if (storedChallenge.length !== submittedChallenge.length || !timingSafeEqual(storedChallenge, submittedChallenge)) return json({ message: "This verification session is no longer valid. Request a new code." }, 403)
+
     if (record.attempts >= 5) {
       await db.del(`signup:otp:${emailKey}`)
       return json({ message: "Too many incorrect attempts. Request a new code." }, 429)
@@ -42,7 +47,7 @@ export async function POST(req: Request) {
       return json({ message: next.attempts >= 5 ? "Too many incorrect attempts. Request a new code." : "That code doesn't match. Check it and try again." }, 400)
     }
 
-    await db.set(`signup:verified:${emailKey}`, "1", { ex: 1800 })
+    await db.set(`signup:verified:${emailKey}:${challengeToken}`, "1", { ex: 1800 })
     await db.del(`signup:otp:${emailKey}`)
     return json({ success: true, message: "Email verified successfully." })
   } catch (error) {
