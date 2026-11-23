@@ -117,3 +117,30 @@ test("SuperAdmin: lists platform metrics and protects SuperAdmin accounts from s
   assert.equal(restored.status, 200);
   assert.equal(JSON.parse(h.getKv("user:target")).suspendedAt, undefined);
 });
+
+test("password reset never trusts the incoming Host header as its email origin", async () => {
+  h.reset();
+  h.setUser("host-user", { name: "Host User", email: "host@example.test", password: "hash" });
+  h.seedKv("user:email:host@example.test", "host-user");
+  process.env.RESEND_API_KEY = "test-key";
+  process.env.EMAIL_FROM = "Chat+ <no-reply@example.test>";
+  delete process.env.NEXTAUTH_URL;
+
+  const originalFetch = global.fetch;
+  let emailSent = false;
+  global.fetch = async () => {
+    emailSent = true;
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    const response = await status(await requestReset.POST(new Request("https://attacker.example/api/auth/password-reset/request", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "host@example.test" }),
+    })));
+    assert.equal(response.status, 200);
+    assert.equal(emailSent, false, "no reset email may use an untrusted request origin");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
