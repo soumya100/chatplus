@@ -195,12 +195,16 @@ async function exerciseBrowser(name, browserType) {
     // to the previous document when a later navigation supersedes it.
     // Ignore only those GET cancellations; failed resources on the current
     // page and every other network error remain visible to the assertion.
-    const isRscRequest = new URL(requestUrl).searchParams.has("_rsc");
-    const isScriptRequest = request.resourceType() === "script";
+    const requestUrlObject = new URL(requestUrl);
+    const isRscRequest = requestUrlObject.searchParams.has("_rsc");
+    const isNextScriptChunk =
+      request.resourceType() === "script" &&
+      requestUrlObject.pathname.startsWith("/_next/static/chunks/");
     const expectedNavigationAbort =
       request.method() === "GET" &&
       ((isRscRequest && ["net::ERR_ABORTED", "NS_BINDING_ABORTED"].includes(errorText)) ||
-        (isScriptRequest && errorText === "net::ERR_ABORTED"));
+        (isNextScriptChunk &&
+          ["net::ERR_ABORTED", "NS_BINDING_ABORTED", "Load request cancelled"].includes(errorText)));
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
