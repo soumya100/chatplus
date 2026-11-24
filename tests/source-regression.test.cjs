@@ -294,10 +294,13 @@ test("signup email verification is enforced by both OTP APIs and registration", 
   assert.match(send, /randomInt\(0, 1_000_000\)/);
   assert.match(send, /randomBytes\(32\)/);
   assert.match(send, /otp-cooldown/);
-  assert.match(send, /RESEND_API_KEY/);
-  assert.match(send, /AbortSignal\.timeout\(12_000\)/);
-  assert.match(send, /Resend rejected verification email/);
-  assert.match(send, /providerResponse\?\.message/);
+  assert.match(send, /isEmailConfigured\(\)/);
+  assert.match(send, /sendEmail\(/);
+  assert.match(send, /SMTP delivery failed/);
+  assert.match(read("src/lib/email.ts"), /nodemailer\.createTransport/);
+  assert.match(read("src/lib/email.ts"), /smtp\.gmail\.com/);
+  assert.match(read("src/lib/email.ts"), /connectionTimeout/);
+  assert.match(read("src/lib/email.ts"), /socketTimeout/);
   assert.match(send, /failed to clear send cooldown/);
   assert.match(send, /rateLimit\(/);
   assert.match(send, /ex:\s*600/);
