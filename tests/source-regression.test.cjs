@@ -294,6 +294,8 @@ test("signup email verification is enforced by both OTP APIs and registration", 
   assert.match(send, /randomInt\(0, 1_000_000\)/);
   assert.match(send, /randomBytes\(32\)/);
   assert.match(send, /otp-cooldown/);
+  assert.match(send, /runtime = "nodejs"/);
+  assert.match(send, /maxDuration = 20/);
   assert.match(send, /isEmailConfigured\(\)/);
   assert.match(send, /sendEmail\(/);
   assert.match(send, /SMTP delivery failed/);
