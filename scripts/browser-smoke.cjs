@@ -202,7 +202,7 @@ async function exerciseBrowser(name, browserType) {
       requestUrlObject.pathname.startsWith("/_next/static/chunks/");
     const expectedNavigationAbort =
       request.method() === "GET" &&
-      ((isRscRequest && ["net::ERR_ABORTED", "NS_BINDING_ABORTED"].includes(errorText)) ||
+      ((isRscRequest && ["net::ERR_ABORTED", "NS_BINDING_ABORTED", "Load request cancelled"].includes(errorText)) ||
         (isNextScriptChunk &&
           ["net::ERR_ABORTED", "NS_BINDING_ABORTED", "Load request cancelled"].includes(errorText)));
     if (!expectedNavigationAbort) {
