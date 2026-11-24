@@ -41,7 +41,12 @@ function configure() {
   h.db.eval = async () => [1, 1];
   h.db.set = async (key, value, options) => {
     if (options?.nx && h.getKv(key) !== null) return null;
-    return originalSet.call(h.db, key, value);
+    const result = await originalSet.call(h.db, key, value);
+    // The shared API test harness models Redis SET but its set() method does
+    // not accept EX/NX options. Preserve the expiry semantics used by this
+    // route so the TTL assertion exercises the real contract.
+    if (options?.ex) await h.db.expire(key, options.ex);
+    return result;
   };
   h.db.del = async key => originalDel.call(h.db, key);
   nodemailer.createTransport = () => ({
