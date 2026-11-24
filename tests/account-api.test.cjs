@@ -1,21 +1,30 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const bcrypt = require("bcryptjs");
+const { createHash } = require("crypto");
 const h = require("./helpers/group-api-harness.cjs");
 
 const register = h.loadRoute("src/app/api/auth/register/route.ts");
+const verifyOtp = h.loadRoute("src/app/api/auth/email-otp/verify/route.ts");
 const search = h.loadRoute("src/app/api/users/search/route.ts");
 const pusherAuth = h.loadRoute("src/app/api/pusher/auth/route.ts");
 const avatar = h.loadRoute("src/app/api/user/avatar/route.ts");
 const upload = h.loadRoute("src/app/api/upload/route.ts");
 
 const status = async response => ({ status: response.status, data: response.headers.get("content-type")?.includes("json") ? await h.body(response) : await response.text(), headers: response.headers });
+const verifyEmailForTest = email => {
+  const key = createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+  const token = "a".repeat(64);
+  h.seedKv(`signup:verified:${key}:${token}`, "1");
+  return token;
+};
 
 // ------------------------------------------------------------------ register
 test("register: creates an account with a hashed password, indexes and a sanitized response", async () => {
   h.reset();
+  const emailVerificationToken = verifyEmailForTest("alice@example.test");
   const result = await status(await register.POST(h.request({
-    name: "Alice <b>Smith</b>", email: "Alice@Example.test", password: "Sup3rSecret!",
+    name: "Alice <b>Smith</b>", email: "Alice@Example.test", password: "Sup3rSecret!", emailVerificationToken,
   })));
   assert.equal(result.status, 201);
   assert.equal(result.data.success, true);
@@ -54,16 +63,69 @@ test("register: duplicate email returns 409 and weak payloads return 400", async
 test("register: IP-based sliding window allows 5 attempts per minute", async () => {
   h.reset();
   for (let i = 0; i < 5; i++) {
+    const emailVerificationToken = verifyEmailForTest(`alice-${i}@example.test`);
     const attempt = await status(await register.POST(h.request({
-      name: "Alice", email: `alice-${i}@example.test`, password: "Sup3rSecret!",
+      name: "Alice", email: `alice-${i}@example.test`, password: "Sup3rSecret!", emailVerificationToken,
     })));
     assert.equal(attempt.status, 201, `attempt ${i + 1} should succeed`);
   }
+  const emailVerificationToken = verifyEmailForTest("alice-6@example.test");
   const blocked = await status(await register.POST(h.request({
-    name: "Alice", email: "alice-6@example.test", password: "Sup3rSecret!",
+    name: "Alice", email: "alice-6@example.test", password: "Sup3rSecret!", emailVerificationToken,
   })));
   assert.equal(blocked.status, 429);
   assert.equal(blocked.headers.get("retry-after"), "60");
+});
+
+test("register: refuses account creation until the email verification marker exists", async () => {
+  h.reset();
+  const result = await status(await register.POST(h.request({
+    name: "Alice", email: "alice@example.test", password: "Sup3rSecret!",
+  })));
+  assert.equal(result.status, 403);
+  assert.equal(h.getKv("user:email:alice@example.test"), null);
+});
+
+test("email OTP: requires the matching signup challenge and consumes a valid code", async () => {
+  h.reset();
+  const email = "alice@example.test";
+  const emailKey = createHash("sha256").update(email).digest("hex");
+  const challengeToken = "b".repeat(64);
+  const code = "123456";
+  const hash = createHash("sha256").update(email + ":" + code + ":").digest("hex");
+  h.seedKv("signup:otp:" + emailKey, JSON.stringify({
+    hash, challengeToken, attempts: 0, createdAt: Date.now(),
+  }));
+
+  const wrongChallenge = await status(await verifyOtp.POST(h.request({
+    email, code, challengeToken: "c".repeat(64),
+  })));
+  assert.equal(wrongChallenge.status, 403);
+
+  const verified = await status(await verifyOtp.POST(h.request({
+    email, code, challengeToken,
+  })));
+  assert.equal(verified.status, 200);
+  assert.equal(h.getKv("signup:verified:" + emailKey + ":" + challengeToken), "1");
+  assert.equal(h.getKv("signup:otp:" + emailKey), null);
+});
+
+test("email OTP: rejects incorrect codes and enforces the attempt limit", async () => {
+  h.reset();
+  const email = "attempts@example.test";
+  const emailKey = createHash("sha256").update(email).digest("hex");
+  const challengeToken = "d".repeat(64);
+  const hash = createHash("sha256").update(email + ":654321:").digest("hex");
+  h.seedKv("signup:otp:" + emailKey, JSON.stringify({
+    hash, challengeToken, attempts: 4, createdAt: Date.now(),
+  }));
+
+  const wrong = await status(await verifyOtp.POST(h.request({
+    email, code: "000000", challengeToken,
+  })));
+  assert.equal(wrong.status, 400);
+  assert.equal(wrong.data.message, "Too many incorrect attempts. Request a new code.");
+  assert.equal(h.getKv("signup:otp:" + emailKey), null);
 });
 
 // -------------------------------------------------------------- users search

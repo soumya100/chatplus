@@ -14,6 +14,8 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("acceptInvite") }),
   z.object({ action: z.literal("declineInvite") }),
   z.object({ action: z.literal("removeMember"), memberId: z.string().min(1) }),
+  z.object({ action: z.literal("promoteAdmin"), memberId: z.string().min(1) }),
+  z.object({ action: z.literal("demoteAdmin"), memberId: z.string().min(1) }),
   z.object({ action: z.literal("leave") }),
   z.object({ action: z.literal("delete") })
 ])
@@ -60,6 +62,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
   try {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
+    const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
     if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
     const parsed = schema.safeParse(await req.json())
     if (!parsed.success) return Response.json({ message: "Invalid community action" }, { status: 400 })
@@ -75,8 +78,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
       if (!raw) return Response.json({ message: "Community not found" }, { status: 404 })
       const expectedRaw = typeof raw === "string" ? raw : JSON.stringify(raw)
       const community = decode<any>(raw)
-      const isMember = (community.memberIds || []).includes(userId)
-      const isAdmin = (community.adminIds || [community.ownerId]).includes(userId)
+      const isMember = (community.memberIds || []).includes(userId) || isSuperAdmin
+      const isAdmin = (community.adminIds || [community.ownerId]).includes(userId) || isSuperAdmin
 
       if (action === "acceptInvite" || action === "declineInvite") {
         const invited = await db.sismember(`community:${communityId}:invites`, userId)
@@ -84,7 +87,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
       } else if (!isMember) {
         return Response.json({ message: "Not a community member" }, { status: 403 })
       }
-      if (action === "delete" && userId !== community.ownerId) {
+      if ((action === "promoteAdmin" || action === "demoteAdmin") && userId !== community.ownerId && !isSuperAdmin) {
+        return Response.json({ message: "Only the community owner can change admin roles" }, { status: 403 })
+      }
+      if (action === "delete" && userId !== community.ownerId && !isSuperAdmin) {
         return Response.json({ message: "Only the community owner can delete it" }, { status: 403 })
       }
       if (action !== "leave" && action !== "delete" && action !== "acceptInvite" && action !== "declineInvite" && !isAdmin) {
@@ -99,12 +105,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         if (parsed.data.name !== undefined) next.name = parsed.data.name
         if (parsed.data.description !== undefined) next.description = parsed.data.description
       } else if (parsed.data.action === "addGroup") {
+        if ((next.groupIds || []).length >= 20) return Response.json({ message: "A community can contain up to 20 groups" }, { status: 400 })
         const groupId = parsed.data.groupId
         const groupKey = `group:${groupId}`
         const groupRaw = await db.get(groupKey)
         if (!groupRaw) return Response.json({ message: "Group not found" }, { status: 404 })
         const group = decode<Group>(groupRaw)
-        if (!(group.adminIds || [group.creatorId]).includes(userId)) return Response.json({ message: "You must administer the group" }, { status: 403 })
+        if (!(group.adminIds || [group.creatorId]).includes(userId) && !isSuperAdmin) return Response.json({ message: "You must administer the group" }, { status: 403 })
         const expectedGroupRaw = typeof groupRaw === "string" ? groupRaw : JSON.stringify(groupRaw)
 
         if (group.communityId && group.communityId !== communityId) {
@@ -121,7 +128,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         next.groupIds = Array.from(new Set([...next.groupIds, groupId]))
         const groupMembers = await db.smembers(`group:${groupId}:members`) as string[]
         const linkedMembers = Array.from(new Set([...(groupMembers || []), group.creatorId]))
-        next.memberIds = Array.from(new Set([...next.memberIds, ...linkedMembers]))
+        const combinedMembers = Array.from(new Set([...next.memberIds, ...linkedMembers]))
+        if (combinedMembers.length > 2000) return Response.json({ message: "A community can contain up to 2,000 members" }, { status: 400 })
+        next.memberIds = combinedMembers
         for (const memberId of linkedMembers) ops.push({ type: "sadd", key: `user:${memberId}:communities`, value: communityId })
         ops.push({ type: "casSet", key: groupKey, expected: expectedGroupRaw, value: JSON.stringify({ ...group, communityId: communityId, updatedAt: Date.now() }) })
       } else if (parsed.data.action === "removeGroup") {
@@ -146,6 +155,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         const targetId = await resolveCommunityMemberId(parsed.data.memberId)
         if (!targetId) return Response.json({ message: "No account matches that email address or user ID" }, { status: 404 })
         if (next.memberIds.includes(targetId)) return Response.json({ message: "User is already a community member" }, { status: 409 })
+        if (next.memberIds.length >= 2000) return Response.json({ message: "This community has reached its 2,000 member limit" }, { status: 400 })
         next.memberIds.push(targetId)
         ops.push({ type: "sadd", key: `user:${targetId}:communities`, value: communityId })
         // If this user had a pending invitation, direct admin addition makes
@@ -153,6 +163,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         ops.push({ type: "srem", key: `community:${communityId}:invites`, value: targetId })
         ops.push({ type: "srem", key: `user:${targetId}:community-invites`, value: communityId })
       } else if (parsed.data.action === "acceptInvite") {
+        if (next.memberIds.length >= 2000) return Response.json({ message: "This community has reached its 2,000 member limit" }, { status: 400 })
         next.memberIds = Array.from(new Set([...next.memberIds, userId]))
         ops.push({ type: "srem", key: `community:${communityId}:invites`, value: userId })
         ops.push({ type: "srem", key: `user:${userId}:community-invites`, value: communityId })
@@ -161,6 +172,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
         // Idempotent removal from both sides of the invitation index.
         ops.push({ type: "srem", key: `community:${communityId}:invites`, value: userId })
         ops.push({ type: "srem", key: `user:${userId}:community-invites`, value: communityId })
+      } else if (parsed.data.action === "promoteAdmin") {
+        const targetId = parsed.data.memberId
+        if (!next.memberIds.includes(targetId)) return Response.json({ message: "User is not a community member" }, { status: 404 })
+        next.adminIds = Array.from(new Set([...next.adminIds, targetId]))
+      } else if (parsed.data.action === "demoteAdmin") {
+        const targetId = parsed.data.memberId
+        if (targetId === community.ownerId) return Response.json({ message: "The community owner must remain an admin" }, { status: 400 })
+        if (!next.memberIds.includes(targetId)) return Response.json({ message: "User is not a community member" }, { status: 404 })
+        next.adminIds = next.adminIds.filter((id: string) => id !== targetId)
       } else if (parsed.data.action === "removeMember") {
         const targetId = parsed.data.memberId
         if (targetId === community.ownerId) return Response.json({ message: "Transfer ownership before removing the owner" }, { status: 400 })
@@ -178,6 +198,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
           ops.push({ type: "srem", key: `user:${inviteeId}:community-invites`, value: communityId })
         }
         ops.push({ type: "del", key: `community:${communityId}:invites` })
+        ops.push({ type: "srem", key: "communities", value: communityId })
         for (const groupId of next.groupIds) {
           const groupKey = `group:${groupId}`
           const groupRaw = await db.get(groupKey)
@@ -198,6 +219,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ communi
           const inviteIds = await db.smembers(`community:${communityId}:invites`) as string[]
           for (const inviteeId of inviteIds || []) ops.push({ type: "srem", key: `user:${inviteeId}:community-invites`, value: communityId })
           ops.push({ type: "del", key: `community:${communityId}:invites` })
+          ops.push({ type: "srem", key: "communities", value: communityId })
           for (const groupId of next.groupIds) {
             const groupKey = `group:${groupId}`
             const groupRaw = await db.get(groupKey)

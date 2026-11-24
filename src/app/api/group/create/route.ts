@@ -56,6 +56,7 @@ export async function POST(req: Request) {
 
         const pipeline = db.pipeline()
         pipeline.set(`group:${groupId}`, JSON.stringify(newGroup))
+        pipeline.sadd("groups", groupId)
         for (const memberId of allMemberIds) {
             pipeline.sadd(`group:${groupId}:members`, memberId)
             pipeline.sadd(`user:${memberId}:groups`, groupId)

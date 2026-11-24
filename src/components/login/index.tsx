@@ -86,7 +86,7 @@ const Login: FC<LoginProps> = () => {
     }
 
     return (
-        <div className="relative min-h-screen w-full flex items-center justify-center p-4 bg-slate-950 overflow-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
+        <main className="relative min-h-screen w-full flex items-center justify-center p-4 bg-slate-950 overflow-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
             {/* Ambient Aurora Glow Background */}
             <div className="absolute top-1/4 -left-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-[128px] pointer-events-none" />
             <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-violet-600/20 rounded-full blur-[128px] pointer-events-none" />
@@ -130,16 +130,18 @@ const Login: FC<LoginProps> = () => {
 
                     {/* Error Banner */}
                     {errorMessage && (
-                        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-red-200 text-xs animate-in fade-in duration-200">
+                        <div role="alert" className="flex items-start gap-2.5 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-red-200 text-xs animate-in fade-in duration-200">
                             <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                             <span>{errorMessage}</span>
                         </div>
                     )}
 
+                    <div className="flex justify-end -mb-2"><Link href="/forgot-password" className="text-xs font-medium text-indigo-300 transition hover:text-indigo-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400">Forgot password?</Link></div>
+
                     {/* Credentials Login Form */}
                     <form onSubmit={handleCredentialsLogin} className="space-y-4">
                         <div className="space-y-1.5">
-                            <label className="block text-xs font-medium text-slate-300">
+                            <label htmlFor="login-email" className="block text-xs font-medium text-slate-300">
                                 Email Address
                             </label>
                             <div className="relative">
@@ -147,6 +149,7 @@ const Login: FC<LoginProps> = () => {
                                     <Mail className="h-4 w-4" />
                                 </div>
                                 <input
+                                    id="login-email"
                                     type="email"
                                     required
                                     autoComplete="email"
@@ -160,7 +163,7 @@ const Login: FC<LoginProps> = () => {
 
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
-                                <label className="block text-xs font-medium text-slate-300">
+                                <label htmlFor="login-password" className="block text-xs font-medium text-slate-300">
                                     Password
                                 </label>
                             </div>
@@ -169,6 +172,7 @@ const Login: FC<LoginProps> = () => {
                                     <Lock className="h-4 w-4" />
                                 </div>
                                 <input
+                                    id="login-password"
                                     type={showPassword ? 'text' : 'password'}
                                     required
                                     autoComplete="current-password"
@@ -181,7 +185,6 @@ const Login: FC<LoginProps> = () => {
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition"
-                                    tabIndex={-1}
                                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                                 >
                                     {showPassword ? (
@@ -248,7 +251,7 @@ const Login: FC<LoginProps> = () => {
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
     )
 }
 

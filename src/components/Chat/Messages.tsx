@@ -659,7 +659,7 @@ const Messages: FC<MessagesProps> = ({
       role='log'
       aria-label='Chat message history'
       aria-live='polite'
-      className='flex h-full flex-1 flex-col-reverse gap-4 p-4 overflow-y-auto overflow-x-hidden scrollbar-thumb-blue scrollbar-thumb-rounded scrollbar-track-blue-lighter scrollbar-w-2 scrolling-touch'
+      className='flex min-h-0 min-w-0 flex-1 flex-col-reverse gap-4 p-4 overflow-y-auto overscroll-contain overflow-x-hidden scrollbar-thumb-blue scrollbar-thumb-rounded scrollbar-track-blue-lighter scrollbar-w-2 scrolling-touch'
     >
       <div ref={scrollDownRef} />
 

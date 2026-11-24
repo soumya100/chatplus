@@ -13,6 +13,7 @@ interface DashBoardLayoutIndexProps {
   unseenFriendRequests: number,
   friends: User[],
   initialUnreadCounts?: Record<string, number>
+  isSuperAdmin?: boolean
 }
 
 const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({ 
@@ -23,7 +24,8 @@ const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({
   profileName, 
   sessionId, 
   unseenFriendRequests,
-  initialUnreadCounts = {}
+  initialUnreadCounts = {},
+  isSuperAdmin = false
 }) => {
   const [openAddFriendModal, setopenAddFriendModal] = useState(false)
   const [openAvatarModal, setOpenAvatarModal] = useState(false)
@@ -44,7 +46,7 @@ const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({
   }
 
   return (
-    <div className='w-full flex h-screen bg-white dark:bg-zinc-950 text-gray-900 dark:text-gray-100'>
+    <div className='w-full flex h-[100dvh] min-h-0 overflow-hidden bg-white dark:bg-zinc-950 text-gray-900 dark:text-gray-100'>
       <div className="md:hidden">
         <MobileChatLayout 
           profileImage={currentAvatar}
@@ -56,6 +58,7 @@ const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({
           handleModalStateOpen={handleModalStateOpen}
           openAddFriendModal={openAddFriendModal}
           initialUnreadCounts={initialUnreadCounts}
+          isSuperAdmin={isSuperAdmin}
           onOpenAvatarModal={handleOpenAvatarModal}
         />
       </div>
@@ -71,9 +74,10 @@ const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({
         handleModalStateClose={setopenAddFriendModal}
         handleCloseButtonModal={handleModalStateClose}
         initialUnreadCounts={initialUnreadCounts}
+        isSuperAdmin={isSuperAdmin}
         onOpenAvatarModal={handleOpenAvatarModal}
       />
-      <aside className='max-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-12 w-full overflow-y-auto bg-gray-50/50 dark:bg-zinc-950'>
+      <aside className='h-full min-h-0 min-w-0 flex-1 max-w-7xl mx-auto box-border px-4 sm:px-6 lg:px-8 py-4 md:py-4 w-full overflow-y-auto overscroll-contain bg-gray-50/50 dark:bg-zinc-950'>
         {children}
       </aside>
 

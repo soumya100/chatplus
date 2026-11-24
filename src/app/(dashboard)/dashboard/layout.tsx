@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { notFound } from 'next/navigation';
+import { isSuperAdminEmail } from '@/lib/superadmin';
 import { ReactNode } from 'react';
 
 interface LayoutProps {
@@ -29,7 +30,8 @@ const Layout = async ({ children }: LayoutProps) => {
             profileEmail={session.user.email || ''} 
             profileImage={session.user.image || ''} 
             profileName={session.user.name || ''}
-            sessionId={session.user.id || ''} 
+            sessionId={session.user.id || ''}
+            isSuperAdmin={isSuperAdminEmail(session.user.email)} 
             unseenFriendRequests={unseenFriendRequestCount}
             initialUnreadCounts={initialUnreadCounts || {}}
         >

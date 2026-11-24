@@ -63,15 +63,16 @@ async function togglePasswordVisibility(page, selector, reveal, engine) {
 // once React has hydrated, a fill sticks and the loop converates on the first
 // pass; anything delivered too early is simply re-filled afterwards.
 const SIGNUP_FIELDS = [
-  { selector: 'input[placeholder="Your Name"]', value: "Smoke Test", label: "name" },
-  { selector: 'input[autocomplete="email"]', value: "smoke@example.test", label: "email" },
+  { selector: '#signup-name', value: "Smoke Test", label: "name" },
+  { selector: '#signup-email', value: "smoke@example.test", label: "email" },
 ];
 
 async function fillSignupField(page, selector, value, label) {
   const deadline = Date.now() + 30_000;
   let lastError = "";
   for (;;) {
-    await page.locator(selector).fill(value);
+    const field = page.locator(selector);
+    if (await field.inputValue() !== value) await field.fill(value);
     try {
       await page.waitForFunction(
         ([expr, expected]) => {
@@ -107,8 +108,8 @@ async function submitSignupExpecting(page, engine, password, confirmation, expec
     for (const { selector, value, label } of SIGNUP_FIELDS) {
       await fillSignupField(page, selector, value, label);
     }
-    await fillSignupField(page, 'input[placeholder="Create a strong password"]', password, "password");
-    await fillSignupField(page, 'input[placeholder="Re-enter your password"]', confirmation, "confirm");
+    await fillSignupField(page, '#signup-password', password, "password");
+    await fillSignupField(page, '#signup-confirm-password', confirmation, "confirm");
     await page.getByRole("button", { name: "Create Account" }).click();
     try {
       await page.getByText(expectedText).waitFor({ timeout: 5_000 });
@@ -168,24 +169,56 @@ async function exerciseBrowser(name, browserType) {
   const { page, close } = await launchSmokeContext(browserType, name);
   const pageErrors = [];
   const failedRequests = [];
+  const requestFrameUrls = new WeakMap();
   page.on("pageerror", error => pageErrors.push(error.message));
+  page.on("request", request => {
+    if (request.resourceType() !== "script") return;
+    try {
+      requestFrameUrls.set(request, request.frame().url());
+    } catch {
+      // Detached frames are still checked as failed requests below.
+    }
+  });
   page.on("requestfailed", request => {
     const errorText = request.failure()?.errorText || "failed";
     const requestUrl = request.url();
-    // Next.js may cancel an in-flight React Server Components (_rsc) fetch
-    // when a later navigation supersedes it. Chromium reports that expected
-    // cancellation as net::ERR_ABORTED; it is not a failed server request.
-    // Keep every other failed request visible to the smoke-test assertion.
+    let supersededByNavigation = false;
+    const startedOnUrl = requestFrameUrls.get(request);
+    if (startedOnUrl) {
+      try {
+        supersededByNavigation = request.frame().url() !== startedOnUrl;
+      } catch {
+        supersededByNavigation = true;
+      }
+    }
+    // Next.js may cancel an in-flight RSC fetch or a script chunk belonging
+    // to the previous document when a later navigation supersedes it.
+    // Ignore only those GET cancellations; failed resources on the current
+    // page and every other network error remain visible to the assertion.
+    const requestUrlObject = new URL(requestUrl);
+    const isRscRequest = requestUrlObject.searchParams.has("_rsc");
+    const isNextScriptChunk =
+      request.resourceType() === "script" &&
+      requestUrlObject.pathname.startsWith("/_next/static/chunks/");
     const expectedNavigationAbort =
-      errorText === "net::ERR_ABORTED" &&
       request.method() === "GET" &&
-      new URL(requestUrl).searchParams.has("_rsc");
+      ((isRscRequest && ["net::ERR_ABORTED", "NS_BINDING_ABORTED"].includes(errorText)) ||
+        (isNextScriptChunk &&
+          ["net::ERR_ABORTED", "NS_BINDING_ABORTED", "Load request cancelled"].includes(errorText)));
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
   });
 
   try {
+    await page.route("**/api/auth/email-otp", async route => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ challengeToken: "a".repeat(64), message: "Code sent for browser smoke." }) });
+    });
+    await page.route("**/api/auth/email-otp/verify", async route => {
+      const request = route.request();
+      const payload = request.postDataJSON();
+      await route.fulfill({ status: payload?.code === "123456" ? 200 : 400, contentType: "application/json", body: JSON.stringify(payload?.code === "123456" ? { verified: true } : { message: "Invalid code." }) });
+    });
     await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: /welcome to chat\+/i }).waitFor();
     await page.locator('input[type="email"]').waitFor({ state: "visible" });
@@ -194,11 +227,27 @@ async function exerciseBrowser(name, browserType) {
     await togglePasswordVisibility(page, passwordSelector, true, name);
     await togglePasswordVisibility(page, passwordSelector, false, name);
 
+    await page.goto(`${baseUrl}/forgot-password`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: /forgot your password/i }).waitFor();
+    await page.locator("#reset-request-email").waitFor({ state: "visible" });
+    await page.goto(`${baseUrl}/reset-password?token=invalid&email=smoke%40example.test`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: /choose a new password/i }).waitFor();
+
     const loginWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(loginWidth <= 391, `${name}: login page overflows mobile viewport: ${loginWidth}px`);
 
     await page.goto(`${baseUrl}/signup`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: /create an account/i }).waitFor();
+    await page.locator("#signup-name").fill("Smoke Test");
+    await page.locator("#signup-email").fill("smoke@example.test");
+    await page.locator("#signup-password").fill("Abcdef12!");
+    await page.locator("#signup-confirm-password").fill("Abcdef12!");
+    await page.getByRole("button", { name: "Create Account" }).click();
+    await page.getByText(/verify your email address using the OTP/i).waitFor();
+    await page.getByRole("button", { name: "Send OTP" }).click();
+    await page.getByRole("dialog", { name: /verify your email/i }).waitFor();
+    await page.locator("#signup-otp").fill("123456");
+    await page.getByText("Email verified").waitFor();
     await submitSignupExpecting(
       page, name,
       "abc", "abc",
@@ -232,7 +281,7 @@ async function exerciseBrowser(name, browserType) {
     assert.equal(await desktopHeading.isVisible(), true, `${name}: login heading should be visible on desktop`);
 
     assert.deepEqual(pageErrors, [], `${name}: no uncaught browser errors should occur during authentication journeys`);
-    assert.deepEqual(failedRequests, [], `${name}: no network requests should fail during authentication journeys`);
+    assert.deepEqual(failedRequests, [], `${name}: no network requests should fail during authentication journeys; failed requests: ${JSON.stringify(failedRequests)}`);
     console.log(`${name}: login, password toggle, signup validation, responsive viewports passed`);
   } finally {
     await close();

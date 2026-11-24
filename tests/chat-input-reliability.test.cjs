@@ -89,8 +89,16 @@ test("group typing indicators track multiple members independently and expire st
   assert.match(chat, /!isGroupChat && userId !== chatPartner\.id/);
   assert.match(chat, /previous\.includes\(userId\) \? previous : \[\.\.\.previous, userId\]/);
   assert.match(chat, /previous\.filter\(id => id !== userId\)/);
-  assert.match(chat, /typingTimeoutsRef\.current\.forEach\(timeout => clearTimeout\(timeout\)\)/);
-  assert.match(chat, /useEffect\(\(\) => \{\s*setTypingUserIds\(\[\]\)/);
+  // Cleanup captures the Map in a local constant before clearing every timer.
+  assert.match(
+    chat,
+    /const typingTimeouts = typingTimeoutsRef\.current[\s\S]*?typingTimeouts\.forEach\(timeout => clearTimeout\(timeout\)\)/
+  );
+  // Reset happens in the same subscription effect after capturing its timer Map.
+  assert.match(
+    chat,
+    /useEffect\(\(\) => \{\s*const typingTimeouts = typingTimeoutsRef\.current\s*setTypingUserIds\(\[\]\)/
+  );
 });
 
 test("a completed media upload is reused after message-send failure instead of uploading duplicate blobs", () => {

@@ -73,14 +73,16 @@ test("Redis Lua integration: final-member deletion removes group, feature, messa
   const userGroups = "user:owner:groups";
   const messages = "chat:group--g-empty:messages";
   const features = "group:g-empty:features";
+  const globalGroups = "groups";
 
   await redis(["SET", groupKey, '{"id":"g-empty","memberIds":["owner"]}']);
   await redis(["SADD", members, "owner"]);
   await redis(["SADD", userGroups, "g-empty"]);
+  await redis(["SADD", globalGroups, "g-empty"]);
   await redis(["SET", features, '{"polls":[]}']);
   await redis(["ZADD", messages, "1", '{"id":"m1"}']);
 
-  const result = await evalLua(script, [groupKey, members, userGroups, messages, features],
+  const result = await evalLua(script, [groupKey, members, userGroups, messages, features, globalGroups],
     ['{"id":"g-empty","memberIds":["owner"]}', "leave", "", "owner", "g-empty", '["owner"]', "", "true"]);
   assert.equal(result, "1");
   assert.equal(await redis(["EXISTS", groupKey]), "0");
@@ -88,6 +90,7 @@ test("Redis Lua integration: final-member deletion removes group, feature, messa
   assert.equal(await redis(["EXISTS", features]), "0");
   assert.equal(await redis(["EXISTS", messages]), "0");
   assert.equal(await redis(["SISMEMBER", userGroups, "g-empty"]), "0");
+  assert.equal(await redis(["SISMEMBER", globalGroups, "g-empty"]), "0", "global SuperAdmin group index is cleaned up atomically");
 });
 
 test("Redis Lua integration: poll voting atomically replaces a prior choice and rejects invalid options", { skip: !enabled }, async () => {
@@ -269,4 +272,182 @@ test("Redis Lua integration: member add compare-and-sets both the group and the 
   assert.equal(await redis(["SISMEMBER", "user:new-member:communities", "c-add"]), "1");
   assert.notEqual(await redis(["ZSCORE", messages, systemMessage]), "");
   assert.equal(await redis(["GET", communityKey]), communityAfter);
+});
+
+
+test("Redis Lua integration: community announcements use compare-and-set to prevent lost updates", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/community/[communityId]/announcements/route.ts", "appendAnnouncement");
+  await redis(["FLUSHDB"]);
+  const key = "community:c1";
+  const before = JSON.stringify({ id: "c1", memberIds: ["owner"], adminIds: ["owner"], announcements: [] });
+  const after = JSON.stringify({ id: "c1", memberIds: ["owner"], adminIds: ["owner"], announcements: [{ id: "a1", text: "Release" }] });
+  await redis(["SET", key, before]);
+  const committed = await evalLua(script, [key], [before, after]);
+  assert.equal(committed, "1");
+  const stale = await evalLua(script, [key], [before, JSON.stringify({ id: "c1", announcements: [{ id: "a2" }] })]);
+  assert.equal(stale, "0", "stale concurrent writers must not overwrite announcements");
+  assert.equal(await redis(["GET", key]), after);
+});
+
+test("Redis Lua integration: password reset token consumption is atomic and single-use", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/auth/password-reset/confirm/route.ts", "consumeResetToken");
+  await redis(["FLUSHDB"]);
+  const tokenKey = "password-reset:token-hash";
+  const userKey = "user:u1";
+  const resetRecord = JSON.stringify({ userId: "u1", emailHash: "email-hash", createdAt: 100 });
+  const oldUser = JSON.stringify({ id: "u1", email: "u1@example.test", password: "old-hash" });
+  const updatedUser = JSON.stringify({ id: "u1", email: "u1@example.test", password: "new-hash", passwordChangedAt: 200 });
+  const latestKey = "password-reset:user:u1";
+  await redis(["SET", tokenKey, resetRecord, "EX", "1800"]);
+  await redis(["SET", latestKey, "token-hash", "EX", "1800"]);
+  await redis(["SET", userKey, oldUser]);
+
+  const consumed = await evalLua(script, [tokenKey, userKey, latestKey], [resetRecord, oldUser, updatedUser, "token-hash"]);
+  assert.equal(consumed, "1");
+  assert.equal(await redis(["GET", userKey]), updatedUser);
+  assert.equal(await redis(["EXISTS", tokenKey]), "0");
+  assert.equal(await redis(["EXISTS", latestKey]), "0");
+
+  const replay = await evalLua(script, [tokenKey, userKey, latestKey], [resetRecord, updatedUser, oldUser, "token-hash"]);
+  assert.equal(replay, "0", "a reset token cannot be consumed twice");
+});
+
+
+test("Redis Lua integration: community creation checks every selected group and commits all membership indexes atomically", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/community/route.ts", "atomicCreateCommunity");
+  await redis(["FLUSHDB"]);
+  const communityKey = "community:c1";
+  const groupKey = "group:g1";
+  const globalCommunities = "communities";
+  const ownerIndex = "user:owner:communities";
+  const memberIndex = "user:member:communities";
+  const beforeGroup = JSON.stringify({ id: "g1", creatorId: "owner", memberIds: ["owner", "member"] });
+  const afterGroup = JSON.stringify({ id: "g1", creatorId: "owner", memberIds: ["owner", "member"], communityId: "c1" });
+  const community = JSON.stringify({ id: "c1", ownerId: "owner", memberIds: ["owner", "member"], groupIds: ["g1"], announcements: [] });
+  await redis(["SET", groupKey, beforeGroup]);
+
+  const committed = await evalLua(script, [communityKey, globalCommunities, groupKey, ownerIndex, memberIndex], [
+    community, JSON.stringify([beforeGroup]), JSON.stringify([afterGroup]), JSON.stringify(["owner", "member"]),
+  ]);
+  assert.equal(committed, "1");
+  assert.equal(await redis(["GET", communityKey]), community);
+  assert.equal(await redis(["GET", groupKey]), afterGroup);
+  assert.equal(await redis(["SISMEMBER", globalCommunities, "c1"]), "1");
+  assert.equal(await redis(["SISMEMBER", ownerIndex, "c1"]), "1");
+  assert.equal(await redis(["SISMEMBER", memberIndex, "c1"]), "1");
+
+  const stale = await evalLua(script, ["community:c2", globalCommunities, groupKey, "user:owner:communities"], [
+    JSON.stringify({ id: "c2" }), JSON.stringify([beforeGroup]), JSON.stringify([JSON.stringify({ id: "g1", communityId: "c2" })]), JSON.stringify(["owner"]),
+  ]);
+  assert.equal(stale, "0", "a stale selected-group version cannot create a competing community");
+  assert.equal(await redis(["EXISTS", "community:c2"]), "0");
+});
+
+
+test("Redis Lua integration: SuperAdmin account moderation compare-and-set prevents stale profile overwrites", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/superadmin/overview/route.ts", "atomicUserModeration");
+  await redis(["FLUSHDB"]);
+  const key = "user:u1";
+  const auditKey = "superadmin:audit:moderation";
+  const auditIndex = "superadmin:audit:index";
+  const original = JSON.stringify({ id: "u1", email: "u1@example.test", name: "Before", password: "hash" });
+  const suspended = JSON.stringify({ id: "u1", email: "u1@example.test", name: "Before", password: "hash", suspendedAt: 123 });
+  const staleUpdated = JSON.stringify({ id: "u1", email: "u1@example.test", name: "Stale", password: "hash" });
+  await redis(["SET", key, original]);
+
+  const audit = JSON.stringify({ actorId: "root", action: "suspend", targetUserId: "u1" });
+  const committed = await evalLua(script, [key, auditKey, auditIndex], [original, suspended, audit, "1800", "123", auditKey]);
+  assert.equal(committed, "1");
+  assert.equal(await redis(["GET", auditKey]), audit, "the audit event is committed with the account mutation");
+  assert.equal(await redis(["ZSCORE", auditIndex, auditKey]), "123", "the audit index is committed atomically");
+  const stale = await evalLua(script, [key, auditKey, auditIndex], [original, staleUpdated, "stale-audit", "1800", "124", "stale-audit-key"]);
+  assert.equal(stale, "0");
+  assert.equal(await redis(["GET", key]), suspended, "stale moderation must not overwrite the committed suspension");
+  assert.equal(await redis(["GET", auditKey]), audit, "stale moderation must not overwrite the audit record");
+});
+
+
+test("Redis Lua integration: community group creation atomically updates community, group and member indexes", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/community/[communityId]/groups/route.ts", "createCommunityGroup");
+  await redis(["FLUSHDB"]);
+  const communityKey = "community:c1";
+  const groupKey = "group:g1";
+  const memberSet = "group:g1:members";
+  const ownerGroupIndex = "user:owner:groups";
+  const memberGroupIndex = "user:member:groups";
+  const ownerCommunityIndex = "user:owner:communities";
+  const beforeCommunity = JSON.stringify({ id: "c1", ownerId: "owner", adminIds: ["owner"], memberIds: ["owner", "member"], groupIds: [] });
+  const afterCommunity = JSON.stringify({ id: "c1", ownerId: "owner", adminIds: ["owner"], memberIds: ["owner", "member"], groupIds: ["g1"] });
+  const group = JSON.stringify({ id: "g1", communityId: "c1", creatorId: "owner", memberIds: ["owner", "member"] });
+  await redis(["SET", communityKey, beforeCommunity]);
+
+  const result = await evalLua(script, [communityKey, groupKey, "groups", memberSet, ownerGroupIndex, memberGroupIndex, ownerCommunityIndex], [
+    beforeCommunity, afterCommunity, group, JSON.stringify(["owner", "member"]), "g1", "c1",
+  ]);
+  assert.equal(result, "1");
+  assert.equal(await redis(["GET", communityKey]), afterCommunity);
+  assert.equal(await redis(["GET", groupKey]), group);
+  assert.equal(await redis(["SISMEMBER", "groups", "g1"]), "1");
+  assert.equal(await redis(["SISMEMBER", memberSet, "member"]), "1");
+  assert.equal(await redis(["SISMEMBER", ownerGroupIndex, "g1"]), "1");
+  assert.equal(await redis(["SISMEMBER", memberGroupIndex, "g1"]), "1");
+  assert.equal(await redis(["SISMEMBER", ownerCommunityIndex, "c1"]), "1");
+
+  const stale = await evalLua(script, [communityKey, "group:g2", "groups", "group:g2:members", "user:owner:groups", ownerCommunityIndex], [
+    JSON.stringify({ id: "stale" }), afterCommunity, JSON.stringify({ id: "g2" }), JSON.stringify(["owner"]), "g2", "c1",
+  ]);
+  assert.equal(stale, "0", "a stale community revision must not create a detached group");
+  assert.equal(await redis(["EXISTS", "group:g2"]), "0");
+});
+
+
+test("Redis Lua integration: deleting the last member unlinks its group from the community in the same transaction", { skip: !enabled }, async () => {
+  const script = lua("src/app/api/group/[groupId]/manage/route.ts", "atomicGroupMutation");
+  await redis(["FLUSHDB"]);
+  const groupKey = "group:g1";
+  const membersKey = "group:g1:members";
+  const actorGroupsKey = "user:owner:groups";
+  const messagesKey = "chat:group--g1:messages";
+  const featuresKey = "group:g1:features";
+  const communityKey = "community:c1";
+  const globalGroupsKey = "groups";
+  const group = JSON.stringify({ id: "g1", creatorId: "owner", memberIds: ["owner"], communityId: "c1" });
+  const community = JSON.stringify({ id: "c1", groupIds: ["g1"], memberIds: ["owner"] });
+  const updatedCommunity = JSON.stringify({ id: "c1", groupIds: [], memberIds: ["owner"] });
+  await redis(["SET", groupKey, group]);
+  await redis(["SADD", membersKey, "owner"]);
+  await redis(["SADD", actorGroupsKey, "g1"]);
+  await redis(["SADD", globalGroupsKey, "g1"]);
+  await redis(["SET", communityKey, community]);
+
+  const result = await evalLua(script, [groupKey, membersKey, actorGroupsKey, messagesKey, featuresKey, actorGroupsKey, communityKey, globalGroupsKey], [
+    group, "leave", "", "owner", "g1", JSON.stringify(["owner"]), "", "true",
+    community, updatedCommunity, "true",
+  ]);
+  assert.equal(result, "1");
+  assert.equal(await redis(["EXISTS", groupKey]), "0");
+  assert.equal(await redis(["GET", communityKey]), updatedCommunity);
+  assert.equal(await redis(["SISMEMBER", globalGroupsKey, "g1"]), "0");
+  assert.equal(await redis(["SISMEMBER", actorGroupsKey, "g1"]), "0");
+});
+
+test("Redis Lua integration: issuing a new password reset invalidates the previous token atomically", { skip: !enabled }, async () => {
+  const issue = lua("src/app/api/auth/password-reset/request/route.ts", "issueResetToken");
+  const cleanup = lua("src/app/api/auth/password-reset/request/route.ts", "cleanupResetToken");
+  await redis(["FLUSHDB"]);
+  const previousKey = "password-reset:previous-hash";
+  const latestKey = "password-reset:user:u1";
+  const nextKey = "password-reset:next-hash";
+  await redis(["SET", previousKey, "previous-record", "EX", "1800"]);
+  await redis(["SET", latestKey, "previous-hash", "EX", "1800"]);
+
+  const issued = await evalLua(issue, [nextKey, latestKey], ['{"userId":"u1"}', "1800", "next-hash"]);
+  assert.equal(issued, "1");
+  assert.equal(await redis(["EXISTS", previousKey]), "0");
+  assert.equal(await redis(["GET", nextKey]), '{"userId":"u1"}');
+  assert.equal(await redis(["GET", latestKey]), "next-hash");
+
+  const staleCleanup = await evalLua(cleanup, [previousKey, latestKey], ["previous-hash"]);
+  assert.equal(staleCleanup, "0", "failed delivery for an older request must not erase a newer token");
+  assert.equal(await redis(["GET", latestKey]), "next-hash");
 });

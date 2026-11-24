@@ -36,7 +36,7 @@ for _, raw in ipairs(rows) do
     if message.senderId == "system" or message.isDeleted then
       return cjson.encode({error = "Message cannot be deleted"})
     end
-    if message.senderId ~= ARGV[2] then
+    if message.senderId ~= ARGV[2] and ARGV[4] ~= "true" then
       return cjson.encode({error = "Forbidden"})
     end
     local cleanupRecord = nil
@@ -87,8 +87,9 @@ export async function POST(req: Request) {
         const parsed = deleteValidator.safeParse(await req.json())
         if (!parsed.success) return new Response("Invalid request payload", { status: 422 })
         const { messageId, chatId } = parsed.data
+        const canModerateGroupMessages = Boolean(session.user.isSuperAdmin) && chatId.startsWith("group--")
 
-        if (!(await hasCurrentChatAccess(db, chatId, userId))) return new Response("Forbidden", { status: 403 })
+        if (!canModerateGroupMessages && !(await hasCurrentChatAccess(db, chatId, userId))) return new Response("Forbidden", { status: 403 })
 
         // Preflight ownership; the Lua script repeats the check and enqueues
         // owned Blob URLs atomically with the tombstone before any external call.
@@ -97,9 +98,9 @@ export async function POST(req: Request) {
         if (existing.senderId === "system" || existing.isDeleted) {
             return new Response("System-generated or already deleted messages cannot be deleted", { status: 400 })
         }
-        if (existing.senderId !== userId) return new Response("Forbidden: You can only delete your own messages", { status: 403 })
+        if (existing.senderId !== userId && !canModerateGroupMessages) return new Response("Forbidden: You can only delete your own messages", { status: 403 })
 
-        const rawResult = await db.eval(atomicDelete, [`chat:${chatId}:messages`, "media:cleanup"], [messageId, userId, String(Date.now())])
+        const rawResult = await db.eval(atomicDelete, [`chat:${chatId}:messages`, "media:cleanup"], [messageId, userId, String(Date.now()), String(canModerateGroupMessages)])
         const result = decodeResult(rawResult)
         if (result?.error) {
             const status = result.error === "Message not found" ? 404 : result.error === "Forbidden" ? 403 : 400

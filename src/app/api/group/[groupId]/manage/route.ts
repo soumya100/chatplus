@@ -49,10 +49,16 @@ local systemMessage = ARGV[7]
 local deleteGroup = ARGV[8] == "true"
 
 if deleteGroup then
+  if ARGV[11] == "true" then
+    local currentCommunity = redis.call("GET", KEYS[#KEYS - 1])
+    if not currentCommunity or currentCommunity ~= ARGV[9] then return 0 end
+    redis.call("SET", KEYS[#KEYS - 1], ARGV[10])
+  end
   redis.call("DEL", KEYS[1], KEYS[2], KEYS[5])
   redis.call("ZREMRANGEBYRANK", KEYS[4], 0, -1)
   redis.call("DEL", KEYS[4])
   redis.call("SREM", KEYS[3], groupId)
+  redis.call("SREM", KEYS[#KEYS], groupId)
   return 1
 end
 
@@ -77,6 +83,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
     try {
         const session = await getServerSession(authOptions)
         const actorId = session?.user?.id
+        const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
         if (!actorId) return Response.json({ message: "Unauthorized" }, { status: 401 })
 
         let body: unknown
@@ -104,8 +111,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
             const group = decode<Group>(raw)
             const memberIds = group.memberIds || []
             const adminIds = resolveAdminIds(group)
-            const isMember = memberIds.includes(actorId)
-            const isAdmin = adminIds.includes(actorId)
+            const isMember = memberIds.includes(actorId) || isSuperAdmin
+            const isAdmin = adminIds.includes(actorId) || isSuperAdmin
             if (!isMember) return Response.json({ message: "You are not a member of this group" }, { status: 403 })
 
             let updatedGroup: Group = { ...group }
@@ -166,7 +173,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
                 }
                 if (!isAdmin) return Response.json({ message: "Only admins can manage members" }, { status: 403 })
                 if (action === "promote" || action === "demote") {
-                    if (actorId !== group.creatorId) {
+                    if (actorId !== group.creatorId && !isSuperAdmin) {
                         return Response.json({ message: "Only the group creator can change admin roles" }, { status: 403 })
                     }
                     if (targetId === group.creatorId) {
@@ -198,8 +205,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
                 senderName: "System"
             } : null
 
-            const redisKeys = [groupKey, membersKey, userGroupsKey, messagesKey, featuresKey,
-                ...removedIds.map(id => `user:${id}:groups`)]
+            let expectedCommunityRaw = ""
+            let updatedCommunity: Record<string, any> | null = null
+            if (deleteGroup && group.communityId) {
+                const rawCommunity = await db.get(`community:${group.communityId}`)
+                if (rawCommunity) {
+                    expectedCommunityRaw = typeof rawCommunity === "string" ? rawCommunity : JSON.stringify(rawCommunity)
+                    const community = decode<Record<string, any>>(rawCommunity)
+                    updatedCommunity = {
+                        ...community,
+                        groupIds: (community.groupIds || []).filter((id: string) => id !== groupId),
+                        updatedAt: Date.now(),
+                    }
+                }
+            }
+            const redisKeys = [
+                groupKey, membersKey, userGroupsKey, messagesKey, featuresKey,
+                ...removedIds.map(id => `user:${id}:groups`),
+                ...(updatedCommunity && group.communityId ? [`community:${group.communityId}`] : []),
+                "groups",
+            ]
             const result = await db.eval(atomicGroupMutation,
                 redisKeys,
                 [
@@ -210,7 +235,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
                     groupId,
                     JSON.stringify(removedIds),
                     systemMessage ? JSON.stringify(systemMessage) : "",
-                    String(deleteGroup)
+                    String(deleteGroup),
+                    expectedCommunityRaw,
+                    updatedCommunity ? JSON.stringify(updatedCommunity) : "",
+                    String(Boolean(updatedCommunity)),
                 ]
             )
 
@@ -219,7 +247,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
             if (deleteGroup) {
                 await Promise.allSettled([
                     pusherServer.trigger(toPusherKey(`private-user:${actorId}:groups`), "group_removed", { groupId }),
-                    pusherServer.trigger(toPusherKey(`private-chat:group--${groupId}`), "group_deleted", { groupId })
+                    pusherServer.trigger(toPusherKey(`private-chat:group--${groupId}`), "group_deleted", { groupId }),
+                    ...(updatedCommunity ? (updatedCommunity.memberIds || []).map((memberId: string) => pusherServer.trigger(
+                        toPusherKey(`private-user:${memberId}:communities`), "community_updated", updatedCommunity
+                    )) : []),
                 ])
                 return Response.json({ success: true, deleted: true })
             }

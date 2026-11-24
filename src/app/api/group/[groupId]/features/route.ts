@@ -136,6 +136,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
   try {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
+    const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
     if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
 
     let body: unknown
@@ -150,10 +151,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ groupId
     const rawGroup = await db.get(`group:${groupId}`)
     if (!rawGroup) return Response.json({ message: "Group not found" }, { status: 404 })
     const group = (typeof rawGroup === "string" ? JSON.parse(rawGroup) : rawGroup) as Group
-    if (!(group.memberIds || []).includes(userId)) return Response.json({ message: "Not a group member" }, { status: 403 })
+    if (!(group.memberIds || []).includes(userId) && !isSuperAdmin) return Response.json({ message: "Not a group member" }, { status: 403 })
 
     const action = parsed.data.action
-    const isAdmin = resolveAdminIds(group).includes(userId)
+    const isAdmin = resolveAdminIds(group).includes(userId) || isSuperAdmin
     const adminOnly = (action === "createPoll" && group.settings?.onlyAdminsCanCreatePolls) ||
       (action === "createEvent" && group.settings?.onlyAdminsCanCreateEvents) ||
       (action === "announce" && (group.settings?.announcementsOnly || group.settings?.onlyAdminsCanSendMessages))
@@ -237,11 +238,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ groupId
   try {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
+    const isSuperAdmin = Boolean(session?.user?.isSuperAdmin)
     if (!userId) return Response.json({ message: "Unauthorized" }, { status: 401 })
     const rawGroup = await db.get(`group:${groupId}`)
     if (!rawGroup) return Response.json({ message: "Group not found" }, { status: 404 })
     const group = (typeof rawGroup === "string" ? JSON.parse(rawGroup) : rawGroup) as Group
-    if (!(group.memberIds || []).includes(userId)) return Response.json({ message: "Not a group member" }, { status: 403 })
+    if (!(group.memberIds || []).includes(userId) && !isSuperAdmin) return Response.json({ message: "Not a group member" }, { status: 403 })
     const raw = await db.get(`group:${groupId}:features`)
     const features = (typeof raw === "string" ? JSON.parse(raw) : raw) || { polls: [], events: [], announcements: [] }
     features.polls = (features.polls || []).map((poll: any) => ({

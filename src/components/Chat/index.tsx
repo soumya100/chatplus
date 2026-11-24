@@ -183,6 +183,7 @@ const Chat: FC<ChatProps> = ({
   }, [chatId, sessionId, chatPartner.id, flushOfflineQueue])
 
   useEffect(() => {
+    const typingTimeouts = typingTimeoutsRef.current
     setTypingUserIds([])
     // 1. Presence channel for tracking active partner in chat room
     const presenceChannelKey = toPusherKey(`presence-chat:${chatId}`)
@@ -272,8 +273,8 @@ const Chat: FC<ChatProps> = ({
       privateChannel.unbind('group_members_updated', groupMembersUpdatedHandler)
       userGroupsChannel?.unbind('group_removed', groupRemovedHandler)
       if (userGroupsChannelKey) pusherClient.unsubscribe(userGroupsChannelKey)
-      typingTimeoutsRef.current.forEach(timeout => clearTimeout(timeout))
-      typingTimeoutsRef.current.clear()
+      typingTimeouts.forEach(timeout => clearTimeout(timeout))
+      typingTimeouts.clear()
     }
   }, [chatId, chatPartner.id, groupId, isGroupChat, router, sessionId])
 
@@ -370,9 +371,9 @@ const Chat: FC<ChatProps> = ({
   }
 
   return (
-    <div className='flex flex-1 justify-between flex-col h-full max-h-[calc(100vh-6rem)]'>
+    <div className='flex min-h-0 min-w-0 flex-1 flex-col h-full max-h-full overflow-hidden'>
       {/* Header */}
-      <div className='flex sm:items-center justify-between py-3 border-b-2 border-gray-200 dark:border-zinc-800 px-5 bg-white dark:bg-zinc-900'>
+      <div className='flex shrink-0 min-w-0 sm:items-center justify-between gap-3 py-3 border-b border-gray-200/80 dark:border-zinc-800 px-4 sm:px-5 bg-white/95 dark:bg-zinc-900/95 shadow-sm'>
         <div className='relative flex items-center space-x-4'>
           <div className='relative'>
             <div className='relative w-9 sm:w-12 h-9 sm:h-12'>
@@ -421,9 +422,9 @@ const Chat: FC<ChatProps> = ({
         </div>
 
         {/* Header Action Buttons */}
-        <div className='flex items-center gap-2'>
+        <div className='flex min-w-0 items-center gap-1 sm:gap-1.5'>
           {isGroupChat && group && (
-            <button onClick={() => setIsGroupFeaturesOpen(true)} className='p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 dark:text-gray-300' title='Group activity' aria-label='Group activity'><Sparkles size={18} /></button>
+            <button onClick={() => setIsGroupFeaturesOpen(true)} className='inline-flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-gray-500 transition-all duration-150 hover:border-indigo-100 hover:bg-indigo-50 hover:text-indigo-600 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:text-gray-300 dark:hover:border-indigo-400/20 dark:hover:bg-indigo-400/10 dark:hover:text-indigo-300' title='Group activity' aria-label='Group activity'><Sparkles size={18} /></button>
           )}
           {/* Group member management */}
           {isGroupChat && group && (
@@ -440,7 +441,7 @@ const Chat: FC<ChatProps> = ({
           {isGroupChat && group && memberInvitesAllowed(group, sessionId) && (
             <button
               onClick={() => setIsAddMembersModalOpen(true)}
-              className='flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-medium text-xs border border-indigo-200 dark:border-indigo-800 transition shadow-2xs'
+              className='inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-gradient-to-b from-indigo-50 to-white px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm transition-all hover:-translate-y-px hover:border-indigo-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:border-indigo-400/25 dark:from-indigo-500/15 dark:to-indigo-500/5 dark:text-indigo-300 dark:hover:border-indigo-300/40'
               title='Add friends to this group'
             >
               <UserPlus size={14} />
@@ -450,7 +451,7 @@ const Chat: FC<ChatProps> = ({
 
           {/* Search Toggle Button & Input */}
           {isSearchOpen ? (
-            <div className='flex items-center gap-1.5 bg-gray-100 dark:bg-zinc-800 px-2.5 py-1 rounded-full'>
+            <div className='flex min-w-0 items-center gap-2 rounded-xl border border-indigo-200/80 bg-white px-3 py-2 shadow-sm ring-1 ring-indigo-500/5 transition focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-500/10 dark:border-zinc-700 dark:bg-zinc-950 dark:focus-within:border-indigo-400'>
               <Search size={15} className='text-gray-400' />
               <input
                 type='text'
@@ -458,7 +459,7 @@ const Chat: FC<ChatProps> = ({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder='Search in chat...'
                 aria-label='Search messages in this conversation'
-                className='bg-transparent border-0 focus:ring-0 text-xs text-gray-800 dark:text-gray-100 placeholder:text-gray-400 p-0 w-32 sm:w-48'
+                className='w-28 border-0 bg-transparent p-0 text-sm text-gray-800 outline-none ring-0 placeholder:text-gray-400 focus:border-0 focus:outline-none focus:ring-0 sm:w-48 dark:text-gray-100'
                 autoFocus
               />
               <button
@@ -466,7 +467,7 @@ const Chat: FC<ChatProps> = ({
                   setIsSearchOpen(false)
                   setSearchQuery('')
                 }}
-                className='text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                className='inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-zinc-800 dark:hover:text-gray-100'
                 aria-label='Close chat search'
               >
                 <X size={15} aria-hidden='true' />
@@ -475,7 +476,7 @@ const Chat: FC<ChatProps> = ({
           ) : (
             <button
               onClick={() => setIsSearchOpen(true)}
-              className='p-2 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 transition-colors'
+              className='inline-flex h-9 w-9 items-center justify-center rounded-xl border border-transparent text-gray-500 transition-all hover:border-indigo-100 hover:bg-indigo-50 hover:text-indigo-600 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:text-gray-400 dark:hover:border-indigo-400/20 dark:hover:bg-indigo-400/10 dark:hover:text-indigo-300'
               title='Search in conversation'
               aria-label='Search in conversation'
             >
@@ -493,6 +494,7 @@ const Chat: FC<ChatProps> = ({
         </div>
       )}
 
+      <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
       <Messages
         initialMessages={initialMessages}
         sessionId={sessionId}
@@ -508,6 +510,7 @@ const Chat: FC<ChatProps> = ({
           if (msg.senderId !== 'system') setReplyingTo(msg)
         }}
       />
+      </div>
       <ChatInput
         chatPartner={chatPartner.name}
         chatId={chatId}

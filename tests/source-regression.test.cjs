@@ -16,7 +16,7 @@ function walk(directory) {
 test("the API route inventory is complete and every route exports an HTTP handler", () => {
   const apiRoot = path.join(root, "src/app/api");
   const routes = walk(apiRoot).filter(file => /route\.(ts|js)$/.test(file));
-  assert.equal(routes.length, 31, "update this inventory assertion when adding or removing API routes");
+  assert.equal(routes.length, 39, "update this inventory assertion when adding or removing API routes");
 
   for (const file of routes) {
     const source = fs.readFileSync(file, "utf8");
@@ -30,6 +30,10 @@ test("protected API routes have an explicit authentication boundary", () => {
   const publicProtocolRoutes = new Set([
     "auth/[...nextauth]/route.ts",
     "auth/register/route.ts",
+    "auth/email-otp/route.ts",
+    "auth/email-otp/verify/route.ts",
+    "auth/password-reset/request/route.ts",
+    "auth/password-reset/confirm/route.ts",
   ]);
 
   for (const file of routes) {
@@ -42,6 +46,16 @@ test("protected API routes have an explicit authentication boundary", () => {
       `No explicit auth boundary found in ${relative}`
     );
   }
+
+  const resetRequest = read("src/app/api/auth/password-reset/request/route.ts")
+  const resetConfirm = read("src/app/api/auth/password-reset/confirm/route.ts")
+  assert.ok(resetRequest.includes("rateLimit"))
+  assert.ok(resetRequest.includes("randomBytes(32)"))
+  assert.ok(resetRequest.includes('createHash("sha256")'))
+  assert.ok(resetRequest.includes("If an account matches"))
+  assert.ok(resetConfirm.includes("token: z.string().regex"))
+  assert.ok(resetConfirm.includes("consume-password-reset-token-v1"))
+  assert.ok(resetConfirm.includes("rateLimit"))
 });
 
 test("chat mounts the member manager and activity panel instead of only toggling state", () => {
@@ -268,4 +282,46 @@ test("message persistence accepts both Upstash auto-deserialized objects and raw
   assert.match(source, /typeof value === "string" \? JSON\.parse\(value\) : value/);
   assert.match(source, /decodeRedisJson<Message>\(result\[1\]\)/);
   assert.doesNotMatch(source, /message:\s*JSON\.parse\(result\[1\]\)/);
+});
+
+
+test("signup email verification is enforced by both OTP APIs and registration", () => {
+  const send = read("src/app/api/auth/email-otp/route.ts");
+  const verify = read("src/app/api/auth/email-otp/verify/route.ts");
+  const register = read("src/app/api/auth/register/route.ts");
+  const signup = read("src/components/signup/index.tsx");
+
+  assert.match(send, /randomInt\(0, 1_000_000\)/);
+  assert.match(send, /randomBytes\(32\)/);
+  assert.match(send, /otp-cooldown/);
+  assert.match(send, /RESEND_API_KEY/);
+  assert.match(send, /rateLimit\(/);
+  assert.match(send, /ex:\s*600/);
+  assert.match(verify, /timingSafeEqual/);
+  assert.match(verify, /storedChallenge/);
+  assert.match(verify, /attempts\s*>=\s*5/);
+  assert.match(verify, /signup:verified:/);
+  assert.match(register, /signup:verified:/);
+  assert.match(register, /Please verify your email address/);
+  assert.match(register, /emailVerificationToken/);
+  assert.match(signup, /signup-otp/);
+  assert.match(signup, /autoComplete="one-time-code"/);
+  assert.match(signup, /verifyEmailOtp\(next\)/);
+  assert.match(signup, /Resend in/);
+  assert.match(signup, /!emailVerified/);
+  assert.match(signup, /emailVerificationToken/);
+});
+
+test("chat viewport owns message scrolling and keeps composer outside the scroll region", () => {
+  const layout = read("src/components/dashboardLayout/index.tsx");
+  const chat = read("src/components/Chat/index.tsx");
+  const messages = read("src/components/Chat/Messages.tsx");
+  const input = read("src/components/Chat/ChatInput.tsx");
+
+  assert.match(layout, /h-\[100dvh\].*overflow-hidden/);
+  assert.match(layout, /h-full min-h-0 min-w-0.*overflow-y-auto overscroll-contain/);
+  assert.match(chat, /min-h-0 min-w-0 flex-1 flex-col h-full max-h-full overflow-hidden/);
+  assert.match(chat, /<div className='flex min-h-0 flex-1 flex-col overflow-hidden'>[\s\S]*<Messages[\s\S]*<\/div>[\s\S]*<ChatInput/);
+  assert.match(messages, /overflow-y-auto overscroll-contain/);
+  assert.match(input, /shrink-0 border-t/);
 });

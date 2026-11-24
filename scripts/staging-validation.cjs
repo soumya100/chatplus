@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 
 const baseUrl = (process.env.CHATAPP_STAGING_URL || "").replace(/\/$/, "");
 const groupId = process.env.CHATAPP_TEST_GROUP_ID;
+const communityId = process.env.CHATAPP_TEST_COMMUNITY_ID;
 const soakSeconds = Math.min(Math.max(Number(process.env.CHATAPP_SOAK_SECONDS || 180), 30), 600);
 
 function required(name) {
@@ -136,12 +137,14 @@ async function main() {
   assert.notEqual(target.hostname, "chatplus-delta.vercel.app", "Refusing to run mutating validation against the known production hostname.");
   assert.equal(process.env.CHATAPP_STAGING_CONFIRMATION, "staging-only", "Set CHATAPP_STAGING_CONFIRMATION=staging-only only after confirming this is an isolated staging deployment.");
   assert.ok(groupId, "Set CHATAPP_TEST_GROUP_ID to a dedicated test group.");
+  assert.ok(communityId, "Set CHATAPP_TEST_COMMUNITY_ID to a dedicated staging community.");
   assert.ok(!/^(main|production)$/i.test(process.env.GITHUB_REF_NAME || ""), "Do not run staging mutation tests from a production branch.");
 
   const accounts = {
     admin: await login("admin", required("CHATAPP_TEST_ADMIN_EMAIL"), required("CHATAPP_TEST_ADMIN_PASSWORD")),
     member: await login("member", required("CHATAPP_TEST_MEMBER_EMAIL"), required("CHATAPP_TEST_MEMBER_PASSWORD")),
     outsider: await login("outsider", required("CHATAPP_TEST_OUTSIDER_EMAIL"), required("CHATAPP_TEST_OUTSIDER_PASSWORD")),
+    superadmin: await login("superadmin", required("CHATAPP_TEST_SUPERADMIN_EMAIL"), required("CHATAPP_TEST_SUPERADMIN_PASSWORD")),
   };
 
   const groupPath = `/api/group/${encodeURIComponent(groupId)}`;
@@ -153,6 +156,14 @@ async function main() {
   assert.ok(!memberDirectory.adminIds?.includes(accounts.member.id), "Configured member account must not be a group admin.");
   await expectStatus(accounts.outsider, `${groupPath}/members`, 403, {}, "outsider group membership isolation");
   await expectStatus(accounts.outsider, `${groupPath}/features`, 403, {}, "outsider group feature isolation");
+  await expectStatus(accounts.member, "/api/superadmin/overview", 404, {}, "member SuperAdmin isolation");
+  await expectStatus(accounts.admin, "/api/superadmin/overview", 404, {}, "group admin SuperAdmin isolation");
+  await expectStatus(accounts.superadmin, "/api/superadmin/overview", 200, {}, "allowlisted SuperAdmin dashboard access");
+  await expectStatus(accounts.superadmin, `${groupPath}/members`, 200, {}, "SuperAdmin cross-group member inspection");
+  await expectStatus(accounts.superadmin, `${groupPath}/features`, 200, {}, "SuperAdmin cross-group moderation access");
+  await expectStatus(accounts.superadmin, `/api/message/history?chatId=${encodeURIComponent(`group--${groupId}`)}&limit=10`, 200, {}, "SuperAdmin group history moderation access");
+  await expectStatus(accounts.superadmin, "/api/community", 200, {}, "SuperAdmin platform-wide community inventory");
+  await expectStatus(accounts.superadmin, `/api/community/${encodeURIComponent(communityId)}/announcements`, 200, {}, "SuperAdmin community announcement moderation access");
 
   const chatId = `group--${groupId}`;
   const requestId = `staging-validation-${Date.now()}-member`;
@@ -181,7 +192,8 @@ async function main() {
 
   await runSoak(accounts, chatId);
   await signOut(accounts.member);
-  console.log("Authenticated staging authorization, session logout, message persistence/idempotency, cross-account isolation, and controlled soak checks passed.");
+  await signOut(accounts.superadmin);
+  console.log("Authenticated staging authorization, SuperAdmin privilege boundaries, session logout, message persistence/idempotency, cross-account isolation, and controlled soak checks passed.");
 }
 
 main().catch(error => {

@@ -5,6 +5,7 @@ import GoogleProvider from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
 import { db } from "./db"
 import { fetchRedis } from "@/helpers/redis"
+import { isSuperAdminEmail } from "@/lib/superadmin"
 
 // VAPT Timing Attack Mitigation:
 // Constant-time dummy hash used to neutralize timing discrepancies when querying non-existent accounts
@@ -54,6 +55,10 @@ const providers: NextAuthOptions["providers"] = [
             }
 
             const dbUser = (typeof rawUser === "string" ? JSON.parse(rawUser) : rawUser) as User
+            if ((dbUser as any).suspendedAt) {
+                await bcrypt.compare(password, DUMMY_BCRYPT_HASH)
+                throw new Error(genericError)
+            }
 
             // If account was created via OAuth without a local password
             if (!dbUser.password) {
@@ -105,10 +110,16 @@ export const authOptions: NextAuthOptions = {
     callbacks: {
         async jwt({ token, user }) {
             if (user) {
+                const storedUser = await fetchRedis("get", `user:${user.id}`) as string | User | null
+                if (storedUser) {
+                    const persisted = (typeof storedUser === "string" ? JSON.parse(storedUser) : storedUser) as User
+                    if ((persisted as any)?.suspendedAt) return { ...token, id: "", exp: 0 }
+                }
                 token.id = user.id
                 token.email = user.email
                 token.name = user.name
                 token.picture = user.image
+                token.isSuperAdmin = isSuperAdminEmail(user.email)
 
                 // Ensure user is indexed in global users set and username search indices
                 db.sadd('users', user.id).catch(() => {})
@@ -135,6 +146,12 @@ export const authOptions: NextAuthOptions = {
             }
 
             const dbUser = (typeof dbUserResult === "string" ? JSON.parse(dbUserResult) : dbUserResult) as User
+            if ((dbUser as any)?.suspendedAt) {
+                return { ...token, id: "", exp: 0 }
+            }
+            if ((dbUser as any)?.passwordChangedAt && (!token.iat || Number(token.iat) * 1000 < Number((dbUser as any).passwordChangedAt))) {
+                return { ...token, id: "", exp: 0 }
+            }
             if (!dbUser?.id || dbUser.id !== token.id) {
                 return { ...token, id: "", exp: 0 }
             }
@@ -144,7 +161,8 @@ export const authOptions: NextAuthOptions = {
                 id: dbUser.id,
                 name: dbUser.name,
                 email: dbUser.email,
-                picture: dbUser.image
+                picture: dbUser.image,
+                isSuperAdmin: isSuperAdminEmail(dbUser.email)
             }
         },
         async session({ session, token }) {
@@ -158,6 +176,7 @@ export const authOptions: NextAuthOptions = {
                 session.user.email = token.email
                 session.user.image = token.picture
                 session.user.name = token.name
+                session.user.isSuperAdmin = Boolean(token.isSuperAdmin)
             }
             return session
         },

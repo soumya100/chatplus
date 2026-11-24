@@ -373,6 +373,81 @@ const db = {
   async zrange(key, start, end, options) { return zrange(key, start, end, options); },
   async eval(script, keys, args) {
     if (scriptRaceHook) scriptRaceHook(script, keys, args);
+    if (script.includes("create-community-group-cas-v1")) {
+      if (forcedConflicts > 0) { forcedConflicts -= 1; return 0; }
+      const current = readRaw(keys[0]);
+      if (!current || current !== args[0]) return 0;
+      const members = JSON.parse(args[3]);
+      writeRaw(keys[0], args[1]);
+      writeRaw(keys[1], args[2]);
+      sadd(keys[2], args[4]);
+      for (let index = 0; index < members.length; index += 1) {
+        sadd(keys[3], members[index]);
+        sadd(keys[4 + index], args[4]);
+      }
+      sadd(keys[keys.length - 1], args[5]);
+      return 1;
+    }
+    if (script.includes("create-community-cas-v1")) {
+      if (forcedConflicts > 0) { forcedConflicts -= 1; return 0; }
+      const expectedGroups = JSON.parse(args[1]);
+      const updatedGroups = JSON.parse(args[2]);
+      const memberIds = JSON.parse(args[3]);
+      for (let index = 0; index < expectedGroups.length; index += 1) {
+        if (readRaw(keys[2 + index]) !== expectedGroups[index]) return 0;
+      }
+      const community = JSON.parse(args[0]);
+      writeRaw(keys[0], args[0]);
+      sadd(keys[1], community.id);
+      for (let index = 0; index < updatedGroups.length; index += 1) {
+        writeRaw(keys[2 + index], updatedGroups[index]);
+      }
+      for (let index = 0; index < memberIds.length; index += 1) {
+        sadd(keys[2 + updatedGroups.length + index], community.id);
+      }
+      return 1;
+    }
+    if (script.includes("community-announcement-cas-v1")) {
+      const current = readRaw(keys[0]);
+      if (!current || current !== args[0]) return 0;
+      writeRaw(keys[0], args[1]);
+      return 1;
+    }
+    if (script.includes("superadmin-user-moderation-cas-v1")) {
+      const current = readRaw(keys[0]);
+      if (!current || current !== args[0]) return 0;
+      writeRaw(keys[0], args[1]);
+      writeRaw(keys[1], args[2]);
+      zadd(keys[2], { score: Number(args[4]), member: args[5] });
+      zremrangebyscore(keys[2], "-inf", Number(args[4]) - 15552000);
+      return 1;
+    }
+if (script.includes("issue-password-reset-token-v1")) {
+      const previous = readRaw(keys[1]);
+      if (previous) deleteRaw("password-reset:" + previous);
+      writeRaw(keys[0], args[0]);
+      applyExpire(keys[0], Number(args[1]));
+      writeRaw(keys[1], args[2]);
+      applyExpire(keys[1], Number(args[1]));
+      return 1;
+    }
+    if (script.includes("cleanup-password-reset-token-v1")) {
+      if (readRaw(keys[1]) !== args[0]) return 0;
+      deleteRaw(keys[0]);
+      deleteRaw(keys[1]);
+      return 1;
+    }
+        if (script.includes("consume-password-reset-token-v1")) {
+      const resetRaw = readRaw(keys[0]);
+      if (!resetRaw || resetRaw !== args[0]) return 0;
+      if (readRaw(keys[2]) !== args[3]) return 0;
+      const userRaw = readRaw(keys[1]);
+      if (!userRaw || userRaw !== args[1]) return -1;
+      writeRaw(keys[1], args[2]);
+      deleteRaw(keys[0]);
+      deleteRaw(keys[2]);
+      return 1;
+    }
     if (script.includes("sliding-window-rate-limit-v1")) {
       const now = Number(args[0]);
       const windowMs = Number(args[1]);
@@ -503,7 +578,7 @@ const db = {
       if (index < 0) return JSON.stringify({ error: "Message not found" });
       const message = parse(rows[index].member);
       if (message.senderId === "system" || message.isDeleted) return JSON.stringify({ error: "Message cannot be edited" });
-      if (message.senderId !== args[1]) return JSON.stringify({ error: "Forbidden" });
+      if (message.senderId !== args[1] && args[3] !== "true") return JSON.stringify({ error: "Forbidden" });
       if (!message.mediaUrl && args[2].trim().length === 0) return JSON.stringify({ error: "Message text cannot be empty" });
       message.text = args[2];
       message.isEdited = true;
@@ -518,7 +593,7 @@ const db = {
       if (index < 0) return JSON.stringify({ error: "Message not found" });
       const message = parse(rows[index].member);
       if (message.senderId === "system" || message.isDeleted) return JSON.stringify({ error: "Message cannot be deleted" });
-      if (message.senderId !== args[1]) return JSON.stringify({ error: "Forbidden" });
+      if (message.senderId !== args[1] && args[3] !== "true") return JSON.stringify({ error: "Forbidden" });
       let cleanupRecord = null;
       if (message.mediaUrl && /https:\/\/[^/]+\.public\.blob\.vercel-storage\.com\//.test(message.mediaUrl)) {
         cleanupRecord = JSON.stringify({ url: message.mediaUrl, queuedAt: Number(args[2]) });
@@ -606,7 +681,14 @@ const db = {
       }
       const deleteGroup = args[7] === "true";
       if (deleteGroup) {
+        if (args[10] === "true") {
+          const communityKey = keys[keys.length - 2];
+          const currentCommunity = readRaw(communityKey);
+          if (!currentCommunity || currentCommunity !== args[8]) return 0;
+          writeRaw(communityKey, args[9]);
+        }
         groups.delete(groupId);
+        srem("groups", groupId);
         features.delete(groupId);
         zsets.delete(`chat:group--${groupId}:messages`);
         return 1;
