@@ -25,9 +25,7 @@ When a group is linked, its current members are included in the community. Later
 
 ## Password recovery
 
-Password reset requires the existing Resend configuration:
-- `RESEND_API_KEY`
-- `EMAIL_FROM` (a sender verified in Resend)
+Signup OTP and password recovery use the shared Nodemailer SMTP sender. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, and `EMAIL_FROM`. Gmail can be used without owning a custom domain: enable Google 2-Step Verification and create an App Password at https://myaccount.google.com/apppasswords. Use the 16-character App Password, not the normal account password. The default SMTP host is `smtp.gmail.com`; port `465` uses implicit TLS. `EMAIL_FROM` should be the Gmail account or an address configured as an allowed Gmail send-as alias.
 
 The request endpoint deliberately returns the same response for known and unknown email addresses. Reset tokens are 256-bit random values; only SHA-256 hashes are stored, the token expires after 30 minutes, and Redis Lua consumes it atomically once. A newer reset request invalidates the previous link. Reset URLs use the configured NEXTAUTH_URL only; the request Host header is never trusted as a link origin. The reset page sends a no-referrer policy to avoid leaking token URLs to other origins. Successful reset updates `passwordChangedAt`, causing previously issued JWT sessions to expire on their next refresh. OAuth-only accounts do not receive local password reset links.
 
