@@ -86,7 +86,7 @@ const Login: FC<LoginProps> = () => {
     }
 
     return (
-        <div className="relative min-h-screen w-full flex items-center justify-center p-4 bg-slate-950 overflow-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
+        <main className="relative min-h-screen w-full flex items-center justify-center p-4 bg-slate-950 overflow-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
             {/* Ambient Aurora Glow Background */}
             <div className="absolute top-1/4 -left-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-[128px] pointer-events-none" />
             <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-violet-600/20 rounded-full blur-[128px] pointer-events-none" />
@@ -251,7 +251,7 @@ const Login: FC<LoginProps> = () => {
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
     )
 }
 
