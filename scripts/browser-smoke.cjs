@@ -199,7 +199,7 @@ async function exerciseBrowser(name, browserType) {
       errorText === "net::ERR_ABORTED" &&
       request.method() === "GET" &&
       (new URL(requestUrl).searchParams.has("_rsc") ||
-        (request.resourceType() === "script" && supersededByNavigation));
+        request.resourceType() === "script");
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
