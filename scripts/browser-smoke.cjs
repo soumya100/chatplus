@@ -195,11 +195,12 @@ async function exerciseBrowser(name, browserType) {
     // to the previous document when a later navigation supersedes it.
     // Ignore only those GET cancellations; failed resources on the current
     // page and every other network error remain visible to the assertion.
+    const isRscRequest = new URL(requestUrl).searchParams.has("_rsc");
+    const isScriptRequest = request.resourceType() === "script";
     const expectedNavigationAbort =
-      errorText === "net::ERR_ABORTED" &&
       request.method() === "GET" &&
-      (new URL(requestUrl).searchParams.has("_rsc") ||
-        request.resourceType() === "script");
+      ((isRscRequest && ["net::ERR_ABORTED", "NS_BINDING_ABORTED"].includes(errorText)) ||
+        (isScriptRequest && errorText === "net::ERR_ABORTED"));
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
