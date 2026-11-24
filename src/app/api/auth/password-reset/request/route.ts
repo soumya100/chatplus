@@ -1,6 +1,7 @@
 import { db } from "@/lib/db"
 import { fetchRedis } from "@/helpers/redis"
 import { rateLimit } from "@/lib/ratelimit"
+import { isEmailConfigured, sendEmail } from "@/lib/email"
 import { createHash, randomBytes } from "crypto"
 
 export const dynamic = "force-dynamic"
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
       rateLimit(emailHash, "password-reset-request", { limit: 3, windowSeconds: 3600 }),
     ])
     if (!ipLimit.success || !emailLimit.success) {
-      return json({ message: "If an account matches that email, password reset instructions will be sent shortly." }, 200)
+      return json({ message: generic }, 200)
     }
 
     const userId = await fetchRedis("get", `user:email:${email}`) as string | null
@@ -49,15 +50,12 @@ export async function POST(req: Request) {
     const rawUser = await db.get(`user:${userId}`)
     if (!rawUser) return json({ success: true, message: generic })
     const user = (typeof rawUser === "string" ? JSON.parse(rawUser) : rawUser) as { id: string; email: string; name?: string; password?: string }
-    // OAuth-only accounts do not have a local password. Keep the response identical.
     if (!user.password || user.id !== userId || user.email?.toLowerCase() !== email) {
       return json({ success: true, message: generic })
     }
 
-    const apiKey = process.env.RESEND_API_KEY
-    const from = process.env.EMAIL_FROM
-    if (!apiKey || !from) {
-      console.error("[password-reset] Email provider is not configured")
+    if (!isEmailConfigured()) {
+      console.error("[password-reset] SMTP email provider is not configured")
       return json({ success: true, message: generic })
     }
 
@@ -91,20 +89,20 @@ export async function POST(req: Request) {
     resetUrl.searchParams.set("email", email)
     const safeName = (user.name || "there").slice(0, 80).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\x27/g, "&#x27;")
 
-    const sent = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from,
-        to: [email],
+    try {
+      await sendEmail({
+        to: email,
         subject: "Reset your Chat+ password",
         html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:28px;color:#0f172a"><h2>Reset your password</h2><p>Hello ${safeName},</p><p>We received a request to reset your Chat+ password. This link expires in 30 minutes and can only be used once.</p><p><a href="${resetUrl.toString()}" style="display:inline-block;background:#4f46e5;color:white;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">Reset password</a></p><p>If you did not request this, you can ignore this email. Your current password will remain unchanged.</p></div>`,
-      }),
-    })
-    if (!sent.ok) {
+      })
+    } catch (error) {
       await db.eval(cleanupResetToken, [resetKey, userResetKey], [tokenHash])
-      console.error("[password-reset] Email provider rejected reset email", sent.status)
-      return json({ success: true, message: generic })
+      const smtpError = error as { code?: unknown; responseCode?: unknown; command?: unknown }
+      console.error("[password-reset] SMTP delivery failed", {
+        code: typeof smtpError?.code === "string" ? smtpError.code.slice(0, 80) : undefined,
+        responseCode: typeof smtpError?.responseCode === "number" ? smtpError.responseCode : undefined,
+        command: typeof smtpError?.command === "string" ? smtpError.command.slice(0, 80) : undefined,
+      })
     }
     return json({ success: true, message: generic })
   } catch (error) {
