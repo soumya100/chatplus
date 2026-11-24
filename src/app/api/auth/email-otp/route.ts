@@ -4,6 +4,9 @@ import { rateLimit } from "@/lib/ratelimit"
 import { isEmailConfigured, sendEmail } from "@/lib/email"
 import { createHash, randomBytes, randomInt } from "crypto"
 
+export const runtime = "nodejs"
+export const maxDuration = 20
+
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 const normalizeEmail = (value: unknown) => typeof value === "string" ? value.trim().toLowerCase() : ""
 
