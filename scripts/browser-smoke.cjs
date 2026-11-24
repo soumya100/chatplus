@@ -276,7 +276,7 @@ async function exerciseBrowser(name, browserType) {
     assert.equal(await desktopHeading.isVisible(), true, `${name}: login heading should be visible on desktop`);
 
     assert.deepEqual(pageErrors, [], `${name}: no uncaught browser errors should occur during authentication journeys`);
-    assert.deepEqual(failedRequests, [], `${name}: no network requests should fail during authentication journeys`);
+    assert.deepEqual(failedRequests, [], `${name}: no network requests should fail during authentication journeys; failed requests: ${JSON.stringify(failedRequests)}`);
     console.log(`${name}: login, password toggle, signup validation, responsive viewports passed`);
   } finally {
     await close();
