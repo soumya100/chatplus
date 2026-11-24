@@ -5,6 +5,8 @@ import { isEmailConfigured, sendEmail } from "@/lib/email"
 import { createHash, randomBytes } from "crypto"
 
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+export const maxDuration = 20
 
 const issueResetToken = `
 -- issue-password-reset-token-v1
