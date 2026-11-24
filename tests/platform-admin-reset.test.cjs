@@ -2,6 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const bcrypt = require("bcryptjs");
 const h = require("./helpers/group-api-harness.cjs");
+const nodemailer = require("nodemailer");
+let lastSentEmail = null;
+const originalCreateTransport = nodemailer.createTransport;
+nodemailer.createTransport = () => ({ sendMail: async message => { lastSentEmail = message; return { messageId: "email-test" }; }, close() {} });
 
 const requestReset = h.loadRoute("src/app/api/auth/password-reset/request/route.ts");
 const confirmReset = h.loadRoute("src/app/api/auth/password-reset/confirm/route.ts");
@@ -13,21 +17,20 @@ test("password reset: sends a one-time link and atomically changes the password"
   const oldHash = await bcrypt.hash("OldPass123!", 4);
   h.setUser("reset-user", { name: "Reset User", email: "reset@example.test", password: oldHash });
   h.seedKv("user:email:reset@example.test", "reset-user");
-  process.env.RESEND_API_KEY = "test-key";
-  process.env.EMAIL_FROM = "Chat+ <no-reply@example.test>";
+  process.env.SMTP_USER = "chatplus@example.test";
+  process.env.SMTP_PASS = "test-app-password";
+  process.env.SMTP_HOST = "smtp.gmail.com";
+  process.env.SMTP_PORT = "465";
+  process.env.SMTP_SECURE = "true";
+  process.env.EMAIL_FROM = "Chat+ <chatplus@example.test>";
   process.env.NEXTAUTH_URL = "https://chatplus.example.test";
 
-  const originalFetch = global.fetch;
-  let emailBody = "";
-  global.fetch = async (_url, init) => {
-    emailBody = String(init?.body || "");
-    return new Response(JSON.stringify({ id: "email-test" }), { status: 200, headers: { "content-type": "application/json" } });
-  };
+  lastSentEmail = null;
   try {
     const requested = await status(await requestReset.POST(h.request({ email: "RESET@example.test" })));
     assert.equal(requested.status, 200);
     assert.match(requested.data.message, /If an account matches/);
-    const html = JSON.parse(emailBody).html;
+    const html = lastSentEmail.html;
     const link = html.match(/href="([^"]+)"/)[1];
     const resetUrl = new URL(link);
     const token = resetUrl.searchParams.get("token");
@@ -42,7 +45,7 @@ test("password reset: sends a one-time link and atomically changes the password"
     const firstToken = token;
     const requestedAgain = await status(await requestReset.POST(h.request({ email: "reset@example.test" })));
     assert.equal(requestedAgain.status, 200);
-    const secondHtml = JSON.parse(emailBody).html;
+    const secondHtml = lastSentEmail.html;
     const secondLink = secondHtml.match(/href="([^"]+)"/)[1];
     const latestToken = new URL(secondLink).searchParams.get("token");
     assert.ok(latestToken && latestToken !== firstToken, "a new request issues a fresh token");
@@ -65,7 +68,7 @@ test("password reset: sends a one-time link and atomically changes the password"
     })));
     assert.equal(replay.status, 400, "reset tokens are single-use");
   } finally {
-    global.fetch = originalFetch;
+    nodemailer.createTransport = originalCreateTransport;
   }
 });
 
@@ -122,16 +125,15 @@ test("password reset never trusts the incoming Host header as its email origin",
   h.reset();
   h.setUser("host-user", { name: "Host User", email: "host@example.test", password: "hash" });
   h.seedKv("user:email:host@example.test", "host-user");
-  process.env.RESEND_API_KEY = "test-key";
-  process.env.EMAIL_FROM = "Chat+ <no-reply@example.test>";
+  process.env.SMTP_USER = "chatplus@example.test";
+  process.env.SMTP_PASS = "test-app-password";
+  process.env.SMTP_HOST = "smtp.gmail.com";
+  process.env.SMTP_PORT = "465";
+  process.env.SMTP_SECURE = "true";
+  process.env.EMAIL_FROM = "Chat+ <chatplus@example.test>";
   delete process.env.NEXTAUTH_URL;
 
-  const originalFetch = global.fetch;
-  let emailSent = false;
-  global.fetch = async () => {
-    emailSent = true;
-    return new Response("{}", { status: 200 });
-  };
+  lastSentEmail = null;
   try {
     const response = await status(await requestReset.POST(new Request("https://attacker.example/api/auth/password-reset/request", {
       method: "POST",
@@ -139,8 +141,8 @@ test("password reset never trusts the incoming Host header as its email origin",
       body: JSON.stringify({ email: "host@example.test" }),
     })));
     assert.equal(response.status, 200);
-    assert.equal(emailSent, false, "no reset email may use an untrusted request origin");
+    assert.equal(lastSentEmail, null, "no reset email may use an untrusted request origin");
   } finally {
-    global.fetch = originalFetch;
+    nodemailer.createTransport = originalCreateTransport;
   }
 });
