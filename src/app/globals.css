@@ -12,12 +12,6 @@ html.dark {
   --app-accent: 129 140 248;
 }
 
-html,
-body {
-  height: 100%;
-  overflow: hidden;
-}
-
 body {
   background-color: #ffffff;
   color: #111827;
