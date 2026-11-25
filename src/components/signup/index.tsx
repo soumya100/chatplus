@@ -474,7 +474,7 @@ const Signup: FC<SignupProps> = () => {
                         <Dialog
                             as="div"
                             open={otpOpen}
-                            className="relative z-[70]"
+                            className="fixed inset-0 z-[70]"
                             onClose={() => { setOtpOpen(false); setOtp('') }}
                         >
                             <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150" />
