@@ -1,15 +1,17 @@
 "use client"
 
 import { FormEvent, useRef, useState } from "react"
-import { Bot, ChevronDown, Loader2, Send, Sparkles, Trash2, User } from "lucide-react"
+import { Bot, ChevronDown, Code2, Loader2, Send, Sparkles, Trash2, User } from "lucide-react"
 
 type ChatMessage = { role: "user" | "assistant"; content: string }
 type Model = "lightning" | "super"
+type AssistantMode = "general" | "coding"
 
 export default function AIChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [model, setModel] = useState<Model>("lightning")
+  const [mode, setMode] = useState<AssistantMode>("general")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const abortRef = useRef<AbortController | null>(null)
@@ -31,7 +33,7 @@ export default function AIChat() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages: nextMessages.slice(-20) }),
+        body: JSON.stringify({ model, mode, messages: nextMessages.slice(-20) }),
         signal: controller.signal,
       })
       if (!response.ok) {
@@ -89,9 +91,17 @@ export default function AIChat() {
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-indigo-600 p-3 text-white shadow-lg shadow-indigo-600/20"><Sparkles size={22} /></div>
-          <div><h1 className="text-xl font-bold text-slate-900 dark:text-white">ChatPlus AI</h1><p className="text-xs text-slate-500 dark:text-slate-400">Powered by NVIDIA Nemotron</p></div>
+          <div><h1 className="text-xl font-bold text-slate-900 dark:text-white">{mode === "coding" ? "ChatPlus Code" : "ChatPlus AI"}</h1><p className="text-xs text-slate-500 dark:text-slate-400">Powered by NVIDIA Nemotron</p></div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor="ai-mode">Assistant mode</label>
+          <div className="relative">
+            <select id="ai-mode" value={mode} onChange={event => setMode(event.target.value as AssistantMode)} disabled={busy} className="max-w-[150px] appearance-none rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500 dark:border-white/10 dark:bg-zinc-900 dark:text-slate-200">
+              <option value="general">General chat</option>
+              <option value="coding">Coding assistant</option>
+            </select>
+            <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
+          </div>
           <label className="sr-only" htmlFor="ai-model">AI model</label>
           <div className="relative">
             <select id="ai-model" value={model} onChange={event => setModel(event.target.value as Model)} disabled={busy} className="max-w-[230px] appearance-none rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-9 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500 dark:border-white/10 dark:bg-zinc-900 dark:text-slate-200">
@@ -106,11 +116,11 @@ export default function AIChat() {
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
         <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
           {!messages.length && <div className="mx-auto flex min-h-full max-w-xl flex-col items-center justify-center text-center">
-            <div className="mb-4 rounded-full bg-indigo-50 p-4 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-300"><Bot size={30}/></div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">What would you like to explore?</h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Ask questions, brainstorm ideas, or get help with code.</p>
+            <div className="mb-4 rounded-full bg-indigo-50 p-4 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-300">{mode === "coding" ? <Code2 size={30}/> : <Bot size={30}/>}</div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{mode === "coding" ? "What are we building or debugging?" : "What would you like to explore?"}</h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{mode === "coding" ? "Get help writing, debugging, refactoring, testing, and reviewing code." : "Ask questions, brainstorm ideas, or switch to Coding assistant for software engineering help."}</p>
             <div className="mt-6 grid w-full gap-2 text-left sm:grid-cols-2">
-              {["Explain a tricky programming concept","Help me debug a React component","Plan a learning roadmap","Summarize a technical topic"].map(suggestion => <button key={suggestion} type="button" onClick={() => setInput(suggestion)} className="rounded-xl border border-slate-200 p-3 text-sm text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-white/10 dark:text-slate-300 dark:hover:bg-indigo-400/10">{suggestion}</button>)}
+              {(mode === "coding" ? ["Debug this error and explain the root cause","Review this code for bugs and security issues","Write unit tests for this function","Refactor this component for maintainability"] : ["Explain a tricky programming concept","Help me brainstorm an idea","Plan a learning roadmap","Summarize a technical topic"]).map(suggestion => <button key={suggestion} type="button" onClick={() => setInput(suggestion)} className="rounded-xl border border-slate-200 p-3 text-sm text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-white/10 dark:text-slate-300 dark:hover:bg-indigo-400/10">{suggestion}</button>)}
             </div>
           </div>}
           {messages.map((message, index) => <div key={index} className={"flex gap-3 " + (message.role === "user" ? "justify-end" : "justify-start")}>
