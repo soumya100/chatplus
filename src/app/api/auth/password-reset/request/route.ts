@@ -120,7 +120,16 @@ export async function POST(req: Request) {
         subject: "Reset your Chat+ password",
         html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:28px;color:#0f172a"><h2>Reset your password</h2><p>Hello ${safeName},</p><p>We received a request to reset your Chat+ password. This link expires in 30 minutes and can only be used once.</p><p><a href="${resetUrl.toString()}" style="display:inline-block;background:#4f46e5;color:white;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">Reset password</a></p><p>If you did not request this, you can ignore this email. Your current password will remain unchanged.</p></div>`,
       })
-      if (!delivery.accepted?.some(recipient => (typeof recipient === "string" ? recipient : recipient.address).toLowerCase() === email)) {
+      const acceptedRecipients = (delivery.accepted as unknown[] | undefined) ?? []
+      const recipientWasAccepted = acceptedRecipients.some((recipient) => {
+        if (typeof recipient === "string") return recipient.toLowerCase() === email
+        if (recipient && typeof recipient === "object" && "address" in recipient) {
+          const address = recipient.address
+          return typeof address === "string" && address.toLowerCase() === email
+        }
+        return false
+      })
+      if (!recipientWasAccepted) {
         await db.eval(cleanupResetToken, [resetKey, userResetKey], [tokenHash])
         console.error("[password-reset] SMTP server did not accept the recipient")
       }
