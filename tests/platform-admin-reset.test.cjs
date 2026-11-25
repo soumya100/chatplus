@@ -5,7 +5,7 @@ const h = require("./helpers/group-api-harness.cjs");
 const nodemailer = require("nodemailer");
 let lastSentEmail = null;
 const originalCreateTransport = nodemailer.createTransport;
-nodemailer.createTransport = () => ({ sendMail: async message => { lastSentEmail = message; return { messageId: "email-test" }; }, close() {} });
+nodemailer.createTransport = () => ({ sendMail: async message => { lastSentEmail = message; return { messageId: "email-test", accepted: [message.to] }; }, close() {} });
 
 const requestReset = h.loadRoute("src/app/api/auth/password-reset/request/route.ts");
 const confirmReset = h.loadRoute("src/app/api/auth/password-reset/confirm/route.ts");
