@@ -377,17 +377,26 @@ const Messages: FC<MessagesProps> = ({
     }
   }
 
+  const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
+    const el = document.getElementById('messages')
+    if (el) {
+      el.scrollTo({ top: 0, behavior })
+    } else if (scrollDownRef.current) {
+      scrollDownRef.current.scrollIntoView({ behavior, block: 'nearest', inline: 'nearest' })
+    }
+  }
+
   // Auto-scroll on mount and on new messages
   useEffect(() => {
     if (isInitialMount.current) {
-      scrollDownRef.current?.scrollIntoView({ behavior: 'auto' })
+      scrollToBottom('auto')
       isInitialMount.current = false
     }
   }, [])
 
   // Auto-scroll on latest message sent or received
   useEffect(() => {
-    scrollDownRef.current?.scrollIntoView({ behavior: 'smooth' })
+    scrollToBottom('smooth')
   }, [messages.length])
 
   // Mark conversation as read whenever chatId changes or messages from partner arrive
@@ -448,7 +457,7 @@ const Messages: FC<MessagesProps> = ({
         }
         return [incoming, ...prev]
       })
-      scrollDownRef.current?.scrollIntoView({ behavior: 'smooth' })
+      scrollToBottom('smooth')
     }
 
     // Message edited
