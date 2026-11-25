@@ -6,7 +6,7 @@ import { rateLimit } from "@/lib/ratelimit"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024
+const MAX_IMAGE_BYTES = 1.25 * 1024 * 1024
 const imageSchema = z.string().max(Math.ceil(MAX_IMAGE_BYTES * 4 / 3) + 64).refine(value => {
   const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
   if (!match) return false
@@ -47,7 +47,7 @@ const requestSchema = z.object({
   const total = value.messages.reduce((sum, message) =>
     sum + message.content.length + (message.imageData?.length || 0) +
     (message.sources || []).reduce((sourceSum, source) => sourceSum + source.title.length + source.url.length + source.snippet.length, 0), 0)
-  return imageCount <= 2 && total <= 11_500_000
+  return imageCount <= 2 && total <= 3_700_000
 }, {
   message: "This conversation is too large to export. Export a shorter conversation with no more than two images.",
 })
@@ -144,7 +144,7 @@ function readJpegDimensions(data: Buffer): { width: number; height: number } | n
     if (segmentLength < 2 || offset + segmentLength > data.length) return null
     if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker)) {
       if (segmentLength < 7) return null
-      return { height: data.readUInt16BE(offset + 3), width: data.readUInt16BE(offset + 5) }
+      return { height: data.readUInt16BE(offset + 3), width: data.readUInt16BE(offset + 5), components: data[offset + 7] }
     }
     offset += segmentLength
   }
@@ -176,7 +176,7 @@ function createPdf(messages: ExportMessage[]): Buffer {
     const base64 = dataUrl.slice("data:image/jpeg;base64,".length)
     const image = Buffer.from(base64, "base64")
     const dimensions = readJpegDimensions(image)
-    if (!dimensions || dimensions.width < 1 || dimensions.height < 1 || dimensions.width > 12000 || dimensions.height > 12000) {
+    if (!dimensions || dimensions.components !== 3 || dimensions.width < 1 || dimensions.height < 1 || dimensions.width > 12000 || dimensions.height > 12000) {
       addText("[Image could not be embedded: unsupported JPEG dimensions]")
       return
     }
