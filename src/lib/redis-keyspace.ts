@@ -45,7 +45,7 @@ export function prefixRedisCommandArgs(method: string, input: unknown[]): unknow
 /** Wrap a pipeline/transaction so queued commands use the same keyspace. */
 export function namespaceRedisPipeline<T extends object>(pipeline: T): T {
     if (!redisKeyPrefix) return pipeline
-    return new Proxy(pipeline, {
+    const proxy = new Proxy(pipeline, {
         get(target, property) {
             const value = Reflect.get(target, property, target)
             if (typeof value !== "function") return value
@@ -57,4 +57,5 @@ export function namespaceRedisPipeline<T extends object>(pipeline: T): T {
             }
         },
     })
+    return proxy
 }
