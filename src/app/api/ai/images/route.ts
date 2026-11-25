@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
     const result: { b64_image?: string | null } = await upstream.json()
     const image = result.b64_image
-    if (typeof image !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(image)) {
+    if (typeof image !== "string" || image.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(image) || Buffer.from(image, "base64").toString("base64") !== image) {
       console.error("[ai-image] NVIDIA response did not contain a valid base64 image")
       return Response.json({ message: "The image provider returned an invalid image. Please try again." }, { status: 502 })
     }
