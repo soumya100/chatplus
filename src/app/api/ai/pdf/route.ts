@@ -17,7 +17,7 @@ const imageSchema = z.string().max(Math.ceil(MAX_IMAGE_BYTES * 4 / 3) + 64).refi
     decoded.byteLength <= MAX_IMAGE_BYTES &&
     decoded.toString("base64") === encoded &&
     decoded[0] === 0xff && decoded[1] === 0xd8 && decoded[2] === 0xff
-}, "Generated image must be a valid JPEG smaller than 4 MB")
+}, "Generated image must be a valid RGB JPEG smaller than 1.25 MiB")
 
 const sourceSchema = z.object({
   title: z.string().max(240),
@@ -287,6 +287,10 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof z.ZodError ? error.issues[0]?.message : undefined
     return Response.json({ message: message || "Invalid PDF export request" }, { status: 400 })
+  }
+
+  if (Buffer.byteLength(JSON.stringify(body), "utf8") > 4_200_000) {
+    return Response.json({ message: "This PDF export is too large. Try exporting fewer messages or images." }, { status: 413 })
   }
 
   const quota = await rateLimit(session.user.id, "ai-pdf-export", {
