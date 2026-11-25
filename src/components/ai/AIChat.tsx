@@ -140,7 +140,7 @@ export default function AIChat() {
         body: JSON.stringify({
           messages: messages.map(message => ({
             role: message.role,
-            content: message.content || (message.imageData ? "[Generated image omitted from PDF export]" : ""),
+            content: message.content || (message.imageData ? "[Generated image attached]" : ""),
             ...(message.sources?.length ? { sources: message.sources } : {}),
             ...(message.imageData ? { imageData: message.imageData } : {}),
           })),
