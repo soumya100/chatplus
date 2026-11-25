@@ -1,3 +1,5 @@
+import { prefixRedisCommandArgs } from "@/lib/redis-keyspace"
+
 const upstashRedisRestUrl = process.env.UPSTASH_REDIS_REST_URL
 const authToken = process.env.UPSTASH_REDIS_REST_TOKEN
 
@@ -8,14 +10,16 @@ export async function fetchRedis(command: Command, ...args: (string | number)[])
         throw new Error('Missing Upstash Redis environment variables')
     }
 
-    // Use POST with JSON array body to avoid URL path concatenation issues with slashes and special characters
+    // Keep raw REST reads in the same environment-specific keyspace as the
+    // @upstash/redis client. POST avoids URL path concatenation issues.
+    const namespacedArgs = prefixRedisCommandArgs(command, args)
     const response = await fetch(upstashRedisRestUrl, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${authToken}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify([command, ...args]),
+        body: JSON.stringify([command, ...namespacedArgs]),
         cache: 'no-store',
     })
 
