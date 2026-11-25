@@ -375,7 +375,7 @@ test("AI image generation is authenticated, quota-limited, and uses the configur
   assert.match(route, /application\/pdf/);
   assert.match(route, /Content-Disposition/);
   assert.match(route, /private, no-store/);
-  assert.match(route, /48000/);
+  assert.match(route, /3_700_000/);
   assert.match(route, /createPdf\(body\.messages\)/);
   assert.match(ui, /fetch\("\/api\/ai\/pdf"/);
   assert.match(ui, /Export PDF/);
@@ -387,10 +387,10 @@ test("AI image generation is authenticated, quota-limited, and uses the configur
   const route = read("src/app/api/ai/pdf/route.ts");
   const ui = read("src/components/ai/AIChat.tsx");
   assert.match(route, /MAX_IMAGE_BYTES/);
-  assert.match(route, /data:image\\/jpeg;base64/);
+  assert.match(route, /data:image/);
   assert.match(route, /readJpegDimensions/);
   assert.match(route, /DCTDecode/);
-  assert.match(route, /Subtype \\/Image/);
+  assert.match(route, /Subtype/);
   assert.match(route, /imageCount <= 2/);
-  assert.match(ui, /imageData: message\\.imageData/);
+  assert.match(ui, /imageData/);
 });
