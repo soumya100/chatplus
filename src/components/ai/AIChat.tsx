@@ -142,6 +142,7 @@ export default function AIChat() {
             role: message.role,
             content: message.content || (message.imageData ? "[Generated image omitted from PDF export]" : ""),
             ...(message.sources?.length ? { sources: message.sources } : {}),
+            ...(message.imageData ? { imageData: message.imageData } : {}),
           })),
         }),
       })
