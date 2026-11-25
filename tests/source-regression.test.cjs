@@ -382,3 +382,15 @@ test("AI image generation is authenticated, quota-limited, and uses the configur
   assert.match(ui, /URL\.createObjectURL/);
   assert.doesNotMatch(ui, /\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/);
 });
+
+\ntest("AI PDF export embeds validated generated JPEGs and bounds image payloads", () => {
+  const route = read("src/app/api/ai/pdf/route.ts");
+  const ui = read("src/components/ai/AIChat.tsx");
+  assert.match(route, /MAX_IMAGE_BYTES/);
+  assert.match(route, /data:image\\/jpeg;base64/);
+  assert.match(route, /readJpegDimensions/);
+  assert.match(route, /DCTDecode/);
+  assert.match(route, /Subtype \\/Image/);
+  assert.match(route, /imageCount <= 2/);
+  assert.match(ui, /imageData: message\\.imageData/);
+});
