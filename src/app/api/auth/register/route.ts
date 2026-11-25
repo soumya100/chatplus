@@ -69,7 +69,7 @@ export async function POST(req: Request) {
         }
         const emailKey = createHash("sha256").update(email).digest("hex")
         const emailVerified = await db.get(`signup:verified:${emailKey}:${emailVerificationToken}`)
-        if (emailVerified !== "1") {
+        if (emailVerified !== "1" && emailVerified !== 1) {
             return new Response(JSON.stringify({ message: "Please verify your email address before creating an account." }), { status: 403, headers: { "Content-Type": "application/json" } })
         }
 
