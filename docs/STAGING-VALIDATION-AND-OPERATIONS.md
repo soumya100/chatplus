@@ -22,7 +22,7 @@ Prepare three dedicated test accounts:
 - Member: ordinary member, not an admin.
 - Outsider: not a member of the test group.
 
-Use a separate staging Upstash database, Pusher application and Vercel Blob store. Do not reuse production credentials or production user data. Ensure the group contains no real users or messages.
+For the current Upstash free-tier constraint, staging may share the production Upstash database only when `REDIS_KEY_PREFIX=staging:` is set on the Vercel Preview/staging deployment. Leave `REDIS_KEY_PREFIX` unset in Production so existing production keys remain unchanged. The Redis client, pipeline/transaction commands, Lua `KEYS` arguments and direct REST reads are namespaced by the application helper. Do not set `REDIS_KEY_PREFIX=staging:` in Production, and do not run destructive `FLUSHDB` integration tests against this shared database. Staging and production still share Upstash storage, throughput and quota limits; this is logical keyspace isolation, not resource isolation. Prefer separate Pusher and Blob resources where practical, and never reuse production user accounts or data in staging. Ensure the test group contains only synthetic users and messages.
 
 Run Actions → Authenticated staging security and soak validation → Run workflow. Type `staging-only` in the confirmation field. The workflow checks:
 - Credentials sign-in and authenticated session establishment for all three roles.
@@ -63,7 +63,7 @@ The production deploy workflow is configured to deploy only a green `main` commi
 
 For release verification:
 1. Confirm the exact deployed commit SHA and Vercel deployment state is **Ready**.
-2. Verify production environment variables exist without printing their values: `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, Google OAuth client ID/secret, Upstash REST URL/token, Blob read/write token, Pusher app ID/key/secret/cluster, and `CRON_SECRET`.
+2. Verify production environment variables exist without printing their values: `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, Google OAuth client ID/secret, Upstash REST URL/token, Blob read/write token, Pusher app ID/key/secret/cluster, and `CRON_SECRET`. Production must leave `REDIS_KEY_PREFIX` unset unless a separately planned data migration has been performed.
 3. Confirm Google OAuth redirect URI exactly matches the production origin and `/api/auth/callback/google`.
 4. Sign in with a dedicated production test account; verify session, message send/read, group membership boundaries, upload/download/delete, realtime events, and sign-out.
 5. Verify both Vercel Cron schedules execute and return success. `vercel.json` schedules expiry cleanup at 02:00 UTC and media cleanup at 03:00 UTC.
