@@ -20,7 +20,6 @@ export function prefixRedisKey(value: unknown): unknown {
 const multiKeyCommands = new Set([
     "del", "unlink", "exists", "touch", "mget", "pfcount",
     "sunion", "sinter", "sdiff", "sunionstore", "sinterstore", "sdiffstore",
-    "rename", "renamenx", "rpoplpush", "brpoplpush", "smove", "copy",
 ])
 
 /** Prefix key arguments for the Redis commands used by this application. */
@@ -35,6 +34,11 @@ export function prefixRedisCommandArgs(method: string, input: unknown[]): unknow
 
     if (multiKeyCommands.has(method)) {
         return args.map(prefixRedisKey)
+    }
+    if (["rename", "renamenx", "rpoplpush", "brpoplpush", "smove", "copy"].includes(method)) {
+        args[0] = prefixRedisKey(args[0])
+        args[1] = prefixRedisKey(args[1])
+        return args
     }
 
     // Redis commands used by the app (GET/SET, hashes, sets, sorted sets,
