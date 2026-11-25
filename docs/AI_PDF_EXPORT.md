@@ -1,6 +1,6 @@
 # ChatPlus AI PDF export
 
-ChatPlus AI can export the current in-browser conversation as a downloadable PDF.
+ChatPlus AI can export the currently loaded in-browser conversation as a downloadable PDF.
 
 ## Configuration
 
@@ -14,7 +14,15 @@ ChatPlus AI can export the current in-browser conversation as a downloadable PDF
 - The route validates message roles, content lengths, source URLs, message count, and total export size.
 - PDF generation is local to the application server. Conversation content is not sent to NVIDIA, Tavily, or another third party for export.
 - The endpoint returns a PDF attachment with private/no-store caching headers.
-- Standard PDF Helvetica text is used. Markdown headings, lists, emphasis, inline code, links, fenced code, and web-search source details are converted to readable plain text.
-- Unicode characters outside the standard PDF text encoding are transliterated or replaced; complex scripts may not render faithfully.
-- Generated image bytes are not embedded in this text export. Image messages are represented by their accompanying text, if any.
-- Conversation content is held in browser state in this phase; it is not persisted as server-side AI history.
+- Markdown headings, lists, emphasis, inline code, links, fenced code, and web-search source details are converted to readable text.
+- Generated NVIDIA JPEGs are embedded directly in the PDF. At most two images are accepted, each limited to 4 MiB; invalid, oversized, or malformed JPEG data is rejected.
+- Images are scaled to fit the page and placed inline with the related conversation message.
+- Standard PDF Helvetica text is still used. Characters outside its supported encoding are transliterated or replaced; this phase does not yet provide full Unicode script shaping.
+- Conversation content is held in browser state; export covers only the currently loaded conversation and is not persisted for later retrieval.
+
+## Environment
+
+No new required variables. Optional server-side controls:
+
+- `AI_PDF_EXPORT_ENABLED=false` disables PDF export.
+- `AI_PDF_RATE_LIMIT=5` sets the per-user hourly export quota.
