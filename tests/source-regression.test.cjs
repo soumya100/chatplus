@@ -366,7 +366,7 @@ test("AI image generation is authenticated, quota-limited, and uses the configur
   assert.match(ui, /download="chatplus-generated-image\.jpg"/);
 });
 
-\ntest("AI PDF export is authenticated, bounded, quota-limited, and returns a private PDF attachment", () => {
+test("AI PDF export is authenticated, bounded, quota-limited, and returns a private PDF attachment", () => {
   const route = read("src/app/api/ai/pdf/route.ts");
   const ui = read("src/components/ai/AIChat.tsx");
   assert.match(route, /getServerSession\(authOptions\)/);
@@ -383,7 +383,7 @@ test("AI image generation is authenticated, quota-limited, and uses the configur
   assert.doesNotMatch(ui, /\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/);
 });
 
-\ntest("AI PDF export embeds validated generated JPEGs and bounds image payloads", () => {
+test("AI PDF export embeds validated generated JPEGs and bounds image payloads", () => {
   const route = read("src/app/api/ai/pdf/route.ts");
   const ui = read("src/components/ai/AIChat.tsx");
   assert.match(route, /MAX_IMAGE_BYTES/);
