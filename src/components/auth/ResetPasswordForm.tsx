@@ -4,13 +4,15 @@ import { FormEvent, useState } from "react"
 import axios from "axios"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Loader2, Lock, MessageCircleCode } from "lucide-react"
+import { Eye, EyeOff, Loader2, Lock, MessageCircleCode } from "lucide-react"
 import toast from "react-hot-toast"
 
 export default function ResetPasswordForm({ token, email }: { token: string; email: string }) {
   const router = useRouter()
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
 
@@ -38,9 +40,20 @@ export default function ResetPasswordForm({ token, email }: { token: string; ema
       <p className="mt-2 text-center text-sm text-slate-400">Use at least 8 characters, including uppercase, lowercase, a number and a symbol.</p>
       {!validLink ? <div role="alert" className="mt-6 rounded-xl border border-rose-800 bg-rose-950/30 p-4 text-sm text-rose-200">This reset link is invalid. Request a new one.</div> : done ? <div role="status" className="mt-6 rounded-xl border border-emerald-800 bg-emerald-950/30 p-4 text-sm text-emerald-200">Your password was updated. Redirecting to sign in…</div> : <form onSubmit={submit} className="mt-6 space-y-4">
         <label htmlFor="new-password" className="block text-xs font-medium text-slate-300">New password</label>
-        <div className="relative"><Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/><input id="new-password" type="password" required minLength={8} maxLength={72} autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-10 pr-3 text-sm text-white outline-none focus:border-indigo-500"/></div>
+        <div className="relative">
+          <Lock size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
+          <input id="new-password" type={showPassword ? "text" : "password"} required minLength={8} maxLength={72} autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} placeholder="Enter a new password" className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-10 pr-11 text-sm text-white outline-none placeholder:text-slate-500 focus:border-indigo-500"/>
+          <button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? "Hide new password" : "Show new password"} aria-pressed={showPassword} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+            {showPassword ? <EyeOff size={17} aria-hidden="true"/> : <Eye size={17} aria-hidden="true"/>}
+          </button>
+        </div>
         <label htmlFor="confirm-new-password" className="block text-xs font-medium text-slate-300">Confirm new password</label>
-        <input id="confirm-new-password" type="password" required minLength={8} maxLength={72} autoComplete="new-password" value={confirm} onChange={event => setConfirm(event.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500"/>
+        <div className="relative">
+          <input id="confirm-new-password" type={showConfirm ? "text" : "password"} required minLength={8} maxLength={72} autoComplete="new-password" value={confirm} onChange={event => setConfirm(event.target.value)} placeholder="Re-enter your new password" className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-3 pr-11 text-sm text-white outline-none placeholder:text-slate-500 focus:border-indigo-500"/>
+          <button type="button" onClick={() => setShowConfirm(value => !value)} aria-label={showConfirm ? "Hide confirmation password" : "Show confirmation password"} aria-pressed={showConfirm} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+            {showConfirm ? <EyeOff size={17} aria-hidden="true"/> : <Eye size={17} aria-hidden="true"/>}
+          </button>
+        </div>
         <button type="submit" disabled={busy || password.length < 8 || password !== confirm} className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">{busy && <Loader2 size={16} className="animate-spin"/>} Update password</button>
       </form>}
       <Link href="/forgot-password" className="mt-6 block text-center text-sm font-medium text-indigo-300 hover:text-indigo-200">Request another reset link</Link>
