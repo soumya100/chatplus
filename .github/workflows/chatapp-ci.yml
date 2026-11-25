@@ -622,7 +622,8 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel deploy --prebuilt --token="$VERCEL_TOKEN"
-\n  # Production deployment runs only for commits pushed to main, and only
+
+  # Production deployment runs only for commits pushed to main, and only
   # after the same complete validation/security quality gate has succeeded.
   deploy-vercel-production:
     name: Deploy Vercel production (after all CI)
@@ -670,7 +671,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
       - name: Pull production environment and build
         env:
