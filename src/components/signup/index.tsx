@@ -19,6 +19,7 @@ import { signIn } from 'next-auth/react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Dialog } from '@headlessui/react'
 import { FC, FormEvent, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 
@@ -470,22 +471,30 @@ const Signup: FC<SignupProps> = () => {
                     </form>
 
                     {otpOpen && (
-                        <div role="dialog" aria-modal="true" aria-labelledby="otp-title" className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
-                            <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-                                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300"><ShieldCheck className="h-5 w-5" /></div>
-                                <h2 id="otp-title" className="text-lg font-bold text-white">Verify your email</h2>
-                                <p className="mt-1 text-xs leading-5 text-slate-400">Enter the 6-digit code sent to <span className="font-semibold text-slate-200">{email.trim().toLowerCase()}</span>. It expires in 10 minutes.</p>
-                                <label htmlFor="signup-otp" className="mt-5 block text-xs font-medium text-slate-300">Verification code</label>
-                                <input id="signup-otp" autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={(event) => { const next = event.target.value.replace(/\D/g, '').slice(0, 6); setOtp(next); if (next.length === 6) void verifyEmailOtp(next) }} onKeyDown={(event) => { if (event.key === 'Enter') void verifyEmailOtp() }} aria-label="Six-digit email verification code"
-                                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" placeholder="000000" aria-describedby="otp-feedback" />
-                                {otpMessage && <p id="otp-feedback" role="status" className="mt-3 text-xs text-amber-300">{otpMessage}</p>}
-                                <div className="mt-5 flex items-center justify-between gap-3">
-                                    <button type="button" onClick={() => { setOtpOpen(false); setOtp('') }} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-400 hover:bg-slate-800">Cancel</button>
-                                    <button type="button" onClick={sendEmailOtp} disabled={otpBusy || resendSeconds > 0} className="text-xs font-semibold text-indigo-300 hover:text-indigo-200 disabled:text-slate-600">{resendSeconds > 0 ? "Resend in " + resendSeconds + "s" : "Resend code"}</button>
-                                    <button type="button" onClick={() => void verifyEmailOtp()} disabled={otpBusy || otp.length !== 6} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">{otpBusy ? "Verifying…" : "Verify"}</button>
-                                </div>
+                        <Dialog
+                            as="div"
+                            open={otpOpen}
+                            className="relative z-[70]"
+                            onClose={() => { setOtpOpen(false); setOtp('') }}
+                        >
+                            <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150" />
+                            <div className="fixed inset-0 flex items-center justify-center overflow-hidden p-4">
+                                <Dialog.Panel className="w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                                    <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-300"><ShieldCheck className="h-5 w-5" /></div>
+                                    <Dialog.Title as="h2" id="otp-title" className="text-lg font-bold text-white">Verify your email</Dialog.Title>
+                                    <p className="mt-1 text-xs leading-5 text-slate-400">Enter the 6-digit code sent to <span className="font-semibold text-slate-200">{email.trim().toLowerCase()}</span>. It expires in 10 minutes.</p>
+                                    <label htmlFor="signup-otp" className="mt-5 block text-xs font-medium text-slate-300">Verification code</label>
+                                    <input id="signup-otp" autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={(event) => { const next = event.target.value.replace(/\D/g, '').slice(0, 6); setOtp(next); if (next.length === 6) void verifyEmailOtp(next) }} onKeyDown={(event) => { if (event.key === 'Enter') void verifyEmailOtp() }} aria-label="Six-digit email verification code"
+                                        className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20" placeholder="000000" aria-describedby="otp-feedback" />
+                                    {otpMessage && <p id="otp-feedback" role="status" className="mt-3 text-xs text-amber-300">{otpMessage}</p>}
+                                    <div className="mt-5 flex items-center justify-between gap-3">
+                                        <button type="button" onClick={() => { setOtpOpen(false); setOtp('') }} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-400 hover:bg-slate-800">Cancel</button>
+                                        <button type="button" onClick={sendEmailOtp} disabled={otpBusy || resendSeconds > 0} className="text-xs font-semibold text-indigo-300 hover:text-indigo-200 disabled:text-slate-600">{resendSeconds > 0 ? "Resend in " + resendSeconds + "s" : "Resend code"}</button>
+                                        <button type="button" onClick={() => void verifyEmailOtp()} disabled={otpBusy || otp.length !== 6} className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">{otpBusy ? "Verifying…" : "Verify"}</button>
+                                    </div>
+                                </Dialog.Panel>
                             </div>
-                        </div>
+                        </Dialog>
                     )}
 
                     {/* Divider */}

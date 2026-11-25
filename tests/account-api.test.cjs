@@ -86,6 +86,25 @@ test("register: refuses account creation until the email verification marker exi
   assert.equal(h.getKv("user:email:alice@example.test"), null);
 });
 
+test("register: accepts a numeric Redis representation of the verified marker", async () => {
+  h.reset();
+  const email = "redis-number@example.test";
+  const token = verifyEmailForTest(email);
+  const originalGet = h.db.get;
+  h.db.get = async key => {
+    if (key === `signup:verified:${createHash("sha256").update(email).digest("hex")}:${token}`) return 1;
+    return originalGet.call(h.db, key);
+  };
+  try {
+    const result = await status(await register.POST(h.request({
+      name: "Alice", email, password: "Sup3rSecret!", emailVerificationToken: token,
+    })));
+    assert.equal(result.status, 201);
+  } finally {
+    h.db.get = originalGet;
+  }
+});
+
 test("email OTP: requires the matching signup challenge and consumes a valid code", async () => {
   h.reset();
   const email = "alice@example.test";

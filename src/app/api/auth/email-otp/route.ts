@@ -1,7 +1,11 @@
 import { db } from "@/lib/db"
 import { fetchRedis } from "@/helpers/redis"
 import { rateLimit } from "@/lib/ratelimit"
+import { isEmailConfigured, sendEmail } from "@/lib/email"
 import { createHash, randomBytes, randomInt } from "crypto"
+
+export const runtime = "nodejs"
+export const maxDuration = 20
 
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 const normalizeEmail = (value: unknown) => typeof value === "string" ? value.trim().toLowerCase() : ""
@@ -28,9 +32,7 @@ export async function POST(req: Request) {
     const cooldown = await db.set(cooldownKey, "1", { nx: true, ex: 60 })
     if (!cooldown) return json({ message: "A code was sent recently. Please wait before requesting another." }, 429)
 
-    const apiKey = process.env.RESEND_API_KEY
-    const from = process.env.EMAIL_FROM
-    if (!apiKey || !from) {
+    if (!isEmailConfigured()) {
       await db.del(cooldownKey)
       return json({ message: "Email verification is not configured yet. Please contact the administrator." }, 503)
     }
@@ -39,28 +41,12 @@ export async function POST(req: Request) {
     const challengeToken = randomBytes(32).toString("hex")
     const codeHash = createHash("sha256").update(`${email}:${code}:${process.env.NEXTAUTH_SECRET || ""}`).digest("hex")
 
-
-    const sent = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(12_000),
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from,
-        to: [email],
-        subject: "Your Chat+ verification code",
-        html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:28px;color:#0f172a"><h2>Verify your email</h2><p>Use this one-time code to finish creating your Chat+ account.</p><div style="font-size:32px;font-weight:700;letter-spacing:10px;padding:18px;background:#eef2ff;border-radius:12px;text-align:center">${code}</div><p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p></div>`,
-      }),
+    await sendEmail({
+      to: email,
+      subject: "Your Chat+ verification code",
+      html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:28px;color:#0f172a"><h2>Verify your email</h2><p>Use this one-time code to finish creating your Chat+ account.</p><div style="font-size:32px;font-weight:700;letter-spacing:10px;padding:18px;background:#eef2ff;border-radius:12px;text-align:center">${code}</div><p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p></div>`,
     })
-    const providerResponse = await sent.json().catch(() => null) as { name?: unknown; message?: unknown } | null
-    if (!sent.ok) {
-      console.error("[email-otp] Resend rejected verification email", {
-        status: sent.status,
-        name: typeof providerResponse?.name === "string" ? providerResponse.name.slice(0, 120) : undefined,
-        message: typeof providerResponse?.message === "string" ? providerResponse.message.slice(0, 500) : undefined,
-      })
-      await db.del(cooldownKey)
-      return json({ message: "We couldn't send the verification email. Please try again shortly." }, 502)
-    }
+
     await db.set(`signup:otp:${emailKey}`, JSON.stringify({ hash: codeHash, challengeToken, attempts: 0, createdAt: Date.now() }), { ex: 600 })
     await db.del(`signup:verified:${emailKey}`)
     return json({ success: true, challengeToken, message: "Verification code sent. Check your inbox and spam folder." })
@@ -70,7 +56,12 @@ export async function POST(req: Request) {
         console.error("[email-otp] failed to clear send cooldown", cleanupError)
       }
     }
-    console.error("[email-otp] send failed", error)
-    return json({ message: "Unable to send a verification code right now." }, 500)
+    const smtpError = error as { code?: unknown; responseCode?: unknown; command?: unknown }
+    console.error("[email-otp] SMTP delivery failed", {
+      code: typeof smtpError?.code === "string" ? smtpError.code.slice(0, 80) : undefined,
+      responseCode: typeof smtpError?.responseCode === "number" ? smtpError.responseCode : undefined,
+      command: typeof smtpError?.command === "string" ? smtpError.command.slice(0, 80) : undefined,
+    })
+    return json({ message: "We couldn't send the verification email. Please try again shortly." }, 502)
   }
 }

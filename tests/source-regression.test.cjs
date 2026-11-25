@@ -294,10 +294,15 @@ test("signup email verification is enforced by both OTP APIs and registration", 
   assert.match(send, /randomInt\(0, 1_000_000\)/);
   assert.match(send, /randomBytes\(32\)/);
   assert.match(send, /otp-cooldown/);
-  assert.match(send, /RESEND_API_KEY/);
-  assert.match(send, /AbortSignal\.timeout\(12_000\)/);
-  assert.match(send, /Resend rejected verification email/);
-  assert.match(send, /providerResponse\?\.message/);
+  assert.match(send, /runtime = "nodejs"/);
+  assert.match(send, /maxDuration = 20/);
+  assert.match(send, /isEmailConfigured\(\)/);
+  assert.match(send, /sendEmail\(/);
+  assert.match(send, /SMTP delivery failed/);
+  assert.match(read("src/lib/email.ts"), /nodemailer\.createTransport/);
+  assert.match(read("src/lib/email.ts"), /smtp\.gmail\.com/);
+  assert.match(read("src/lib/email.ts"), /connectionTimeout/);
+  assert.match(read("src/lib/email.ts"), /socketTimeout/);
   assert.match(send, /failed to clear send cooldown/);
   assert.match(send, /rateLimit\(/);
   assert.match(send, /ex:\s*600/);
@@ -328,4 +333,22 @@ test("chat viewport owns message scrolling and keeps composer outside the scroll
   assert.match(chat, /<div className='flex min-h-0 flex-1 flex-col overflow-hidden'>[\s\S]*<Messages[\s\S]*<\/div>[\s\S]*<ChatInput/);
   assert.match(messages, /overflow-y-auto overscroll-contain/);
   assert.match(input, /shrink-0 border-t/);
+});
+
+
+test("staging Redis keyspace prefix covers direct commands, Lua keys, pipelines, and REST reads", () => {
+  const namespace = read("src/lib/redis-keyspace.ts");
+  const client = read("src/lib/db.ts");
+  const rest = read("src/helpers/redis.ts");
+  const example = read(".env.example");
+
+  assert.match(namespace, /REDIS_KEY_PREFIX/);
+  assert.match(namespace, /prefixRedisKey/);
+  assert.match(namespace, /method === "eval"/);
+  assert.match(namespace, /namespaceRedisPipeline/);
+  assert.match(client, /prefixRedisCommandArgs/);
+  assert.match(client, /namespaceRedisPipeline/);
+  assert.match(rest, /prefixRedisCommandArgs/);
+  assert.match(example, /REDIS_KEY_PREFIX=staging:/);
+  assert.match(example, /Leave UNSET in production/);
 });

@@ -1,9 +1,12 @@
 import { db } from "@/lib/db"
 import { fetchRedis } from "@/helpers/redis"
 import { rateLimit } from "@/lib/ratelimit"
+import { isEmailConfigured, sendEmail } from "@/lib/email"
 import { createHash, randomBytes } from "crypto"
 
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+export const maxDuration = 20
 
 const issueResetToken = `
 -- issue-password-reset-token-v1
@@ -25,6 +28,30 @@ return 0
 const generic = "If an account matches that email, password reset instructions will be sent shortly."
 const json = (body: unknown, status = 200) => Response.json(body, { status })
 
+/**
+ * Prefer the deployment's canonical Vercel hostname for Preview builds.
+ * NEXTAUTH_URL may be absent in Preview or inherited from Production; using
+ * that value blindly can create unusable reset links. For non-Vercel hosts,
+ * fall back to the origin of the incoming request.
+ */
+function getResetBaseUrl(req: Request): URL {
+  const vercelUrl = process.env.VERCEL_URL?.trim()
+  const configuredUrl = process.env.NEXTAUTH_URL?.trim()
+  const candidate = process.env.VERCEL_ENV === "preview" && vercelUrl
+    ? `https://${vercelUrl}`
+    : configuredUrl || new URL(req.url).origin
+  const baseUrl = new URL(candidate)
+  if (
+    baseUrl.username ||
+    baseUrl.password ||
+    !["http:", "https:"].includes(baseUrl.protocol) ||
+    (process.env.NODE_ENV === "production" && baseUrl.protocol !== "https:")
+  ) {
+    throw new Error("Untrusted password reset origin")
+  }
+  return baseUrl
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null)
@@ -40,7 +67,7 @@ export async function POST(req: Request) {
       rateLimit(emailHash, "password-reset-request", { limit: 3, windowSeconds: 3600 }),
     ])
     if (!ipLimit.success || !emailLimit.success) {
-      return json({ message: "If an account matches that email, password reset instructions will be sent shortly." }, 200)
+      return json({ success: true, message: generic })
     }
 
     const userId = await fetchRedis("get", `user:email:${email}`) as string | null
@@ -49,66 +76,80 @@ export async function POST(req: Request) {
     const rawUser = await db.get(`user:${userId}`)
     if (!rawUser) return json({ success: true, message: generic })
     const user = (typeof rawUser === "string" ? JSON.parse(rawUser) : rawUser) as { id: string; email: string; name?: string; password?: string }
-    // OAuth-only accounts do not have a local password. Keep the response identical.
     if (!user.password || user.id !== userId || user.email?.toLowerCase() !== email) {
       return json({ success: true, message: generic })
     }
 
-    const apiKey = process.env.RESEND_API_KEY
-    const from = process.env.EMAIL_FROM
-    if (!apiKey || !from) {
-      console.error("[password-reset] Email provider is not configured")
+    if (!isEmailConfigured()) {
+      console.error("[password-reset] SMTP email provider is not configured")
+      return json({ success: true, message: generic })
+    }
+
+    let baseUrl: URL
+    try {
+      baseUrl = getResetBaseUrl(req)
+    } catch (error) {
+      console.error("[password-reset] unable to determine a safe reset URL origin", {
+        reason: error instanceof Error ? error.message : "invalid origin",
+        vercelEnv: process.env.VERCEL_ENV || "unset",
+        hasVercelUrl: Boolean(process.env.VERCEL_URL),
+        hasNextAuthUrl: Boolean(process.env.NEXTAUTH_URL?.trim()),
+      })
       return json({ success: true, message: generic })
     }
 
     const token = randomBytes(32).toString("hex")
     const tokenHash = createHash("sha256").update(token).digest("hex")
     const resetKey = `password-reset:${tokenHash}`
-    const configuredBaseUrl = process.env.NEXTAUTH_URL
-    if (!configuredBaseUrl) {
-      console.error("[password-reset] NEXTAUTH_URL is not configured")
-      return json({ success: true, message: generic })
-    }
-    let baseUrl: URL
-    try {
-      baseUrl = new URL(configuredBaseUrl)
-      if (baseUrl.username || baseUrl.password ||
-          (process.env.NODE_ENV === "production" && baseUrl.protocol !== "https:")) {
-        throw new Error("Untrusted password reset origin")
-      }
-    } catch {
-      console.error("[password-reset] NEXTAUTH_URL is invalid")
-      return json({ success: true, message: generic })
-    }
-
     const userResetKey = "password-reset:user:" + userId
     const record = JSON.stringify({ userId, emailHash, createdAt: Date.now() })
     const issued = await db.eval(issueResetToken, [resetKey, userResetKey], [record, "1800", tokenHash])
-    if (Number(issued) !== 1) return json({ success: true, message: generic })
+    if (Number(issued) !== 1) {
+      console.error("[password-reset] reset token could not be stored")
+      return json({ success: true, message: generic })
+    }
 
     const resetUrl = new URL("/reset-password", baseUrl.origin)
     resetUrl.searchParams.set("token", token)
     resetUrl.searchParams.set("email", email)
-    const safeName = (user.name || "there").slice(0, 80).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\x27/g, "&#x27;")
+    const safeName = (user.name || "there").slice(0, 80).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\\x27/g, "&#x27;")
 
-    const sent = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from,
-        to: [email],
+    try {
+      const delivery = await sendEmail({
+        to: email,
         subject: "Reset your Chat+ password",
         html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:28px;color:#0f172a"><h2>Reset your password</h2><p>Hello ${safeName},</p><p>We received a request to reset your Chat+ password. This link expires in 30 minutes and can only be used once.</p><p><a href="${resetUrl.toString()}" style="display:inline-block;background:#4f46e5;color:white;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">Reset password</a></p><p>If you did not request this, you can ignore this email. Your current password will remain unchanged.</p></div>`,
-      }),
-    })
-    if (!sent.ok) {
-      await db.eval(cleanupResetToken, [resetKey, userResetKey], [tokenHash])
-      console.error("[password-reset] Email provider rejected reset email", sent.status)
-      return json({ success: true, message: generic })
+      })
+      const acceptedRecipients = (delivery.accepted as unknown[] | undefined) ?? []
+      const recipientWasAccepted = acceptedRecipients.some((recipient) => {
+        if (typeof recipient === "string") return recipient.toLowerCase() === email
+        if (recipient && typeof recipient === "object" && "address" in recipient) {
+          const address = recipient.address
+          return typeof address === "string" && address.toLowerCase() === email
+        }
+        return false
+      })
+      if (!recipientWasAccepted) {
+        await db.eval(cleanupResetToken, [resetKey, userResetKey], [tokenHash])
+        console.error("[password-reset] SMTP server did not accept the recipient")
+      }
+    } catch (error) {
+      await db.eval(cleanupResetToken, [resetKey, userResetKey], [tokenHash]).catch(cleanupError => {
+        console.error("[password-reset] failed to clean up undelivered reset token", cleanupError)
+      })
+      const smtpError = error as { code?: unknown; responseCode?: unknown; command?: unknown }
+      console.error("[password-reset] SMTP delivery failed", {
+        code: typeof smtpError?.code === "string" ? smtpError.code.slice(0, 80) : undefined,
+        responseCode: typeof smtpError?.responseCode === "number" ? smtpError.responseCode : undefined,
+        command: typeof smtpError?.command === "string" ? smtpError.command.slice(0, 80) : undefined,
+      })
     }
     return json({ success: true, message: generic })
   } catch (error) {
-    console.error("[password-reset] request failed", error)
+    console.error("[password-reset] request failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message.slice(0, 200) : "Unknown failure",
+    })
     return json({ success: true, message: generic })
   }
 }
