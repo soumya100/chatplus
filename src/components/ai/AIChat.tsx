@@ -160,7 +160,7 @@ export default function AIChat() {
         </div>
         {error && <div role="alert" className="mx-4 mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">{error}</div>}
         <form onSubmit={submit} className="border-t border-slate-200 p-3 dark:border-white/10 sm:p-4">
-          {webSearch && <p className="mb-2 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-300"><Globe2 size={13}/> Live web search is enabled. Your message is sent to Tavily to find current sources.</p>}
+          {webSearch && <p className="mb-2 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-300"><Globe2 size={13}/> Live web search is on. Each message you send is shared with Tavily to find current sources.</p>}
           <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 focus-within:border-indigo-400 dark:border-white/10 dark:bg-zinc-950">
             <label className="sr-only" htmlFor="ai-prompt">Message ChatPlus AI</label>
             <textarea id="ai-prompt" value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(event as unknown as FormEvent) } }} rows={1} maxLength={12000} placeholder="Message ChatPlus AI…" className="max-h-40 min-h-10 flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" />
