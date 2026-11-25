@@ -15,7 +15,7 @@ ChatPlus AI can export the currently loaded in-browser conversation as a downloa
 - PDF generation is local to the application server. Conversation content is not sent to NVIDIA, Tavily, or another third party for export.
 - The endpoint returns a PDF attachment with private/no-store caching headers.
 - Markdown headings, lists, emphasis, inline code, links, fenced code, and web-search source details are converted to readable text.
-- Generated NVIDIA JPEGs are embedded directly in the PDF. At most two images are accepted, each limited to 4 MiB; invalid, oversized, or malformed JPEG data is rejected.
+- Generated NVIDIA JPEGs are embedded directly in the PDF. At most two RGB JPEG images are accepted, each limited to 1.25 MiB; invalid, oversized, malformed, grayscale, and CMYK JPEG data is rejected. The combined request is capped at 3.7 MB to stay within typical serverless request-body limits.
 - Images are scaled to fit the page and placed inline with the related conversation message.
 - Standard PDF Helvetica text is still used. Characters outside its supported encoding are transliterated or replaced; this phase does not yet provide full Unicode script shaping.
 - Conversation content is held in browser state; export covers only the currently loaded conversation and is not persisted for later retrieval.
