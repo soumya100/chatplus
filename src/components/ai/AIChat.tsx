@@ -14,6 +14,8 @@ export default function AIChat() {
   const [model, setModel] = useState<Model>("lightning")
   const [mode, setMode] = useState<AssistantMode>("general")
   const [webSearch, setWebSearch] = useState(false)
+  const [imageMode, setImageMode] = useState(false)
+  const [imageResolution, setImageResolution] = useState("720_1_1")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const abortRef = useRef<AbortController | null>(null)
@@ -23,6 +25,10 @@ export default function AIChat() {
     event.preventDefault()
     const prompt = input.trim()
     if (!prompt || busy) return
+    if (imageMode) {
+      await generateImage(prompt)
+      return
+    }
     const nextMessages: ChatMessage[] = [...messages, { role: "user", content: prompt }]
     setMessages([...nextMessages, { role: "assistant", content: "" }])
     setInput("")
@@ -173,7 +179,7 @@ export default function AIChat() {
             {message.role === "assistant" && <div className="mt-1 h-8 w-8 shrink-0 rounded-xl bg-indigo-600 p-2 text-white"><Bot size={16}/></div>}
             <div className="flex max-w-[90%] min-w-0 flex-col items-start gap-2">
               <div className={"max-w-full whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 " + (message.role === "user" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-slate-100")}>
-                {message.content || (busy && index === messages.length - 1 ? <span className="inline-flex items-center gap-2 text-slate-500"><Loader2 size={14} className="animate-spin"/> Searching and thinking…</span> : null)}
+                {message.content || (busy && index === messages.length - 1 ? <span className="inline-flex items-center gap-2 text-slate-500"><Loader2 size={14} className="animate-spin"/> {imageMode ? "Generating your image…" : "Searching and thinking…"}</span> : null)}
               </div>
               {message.imageData && <div className="w-full overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-zinc-950">
                 <img src={message.imageData} alt="AI-generated image" className="h-auto max-h-[560px] w-full rounded-lg object-contain" />
@@ -213,7 +219,7 @@ export default function AIChat() {
           {webSearch && !imageMode && <p className="mb-2 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-300"><Globe2 size={13}/> Live web search is on. Each message you send is shared with Tavily to find current sources.</p>}
           <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 focus-within:border-indigo-400 dark:border-white/10 dark:bg-zinc-950">
             <label className="sr-only" htmlFor="ai-prompt">Message ChatPlus AI</label>
-            <textarea id="ai-prompt" value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(event as unknown as FormEvent) } }} rows={1} maxLength={12000} placeholder={imageMode ? "Describe the image you want to generate…" : "Message ChatPlus AI…"} className="max-h-40 min-h-10 flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" />
+            <textarea id="ai-prompt" value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(event as unknown as FormEvent) } }} rows={1} maxLength={imageMode ? 4000 : 12000} placeholder={imageMode ? "Describe the image you want to generate…" : "Message ChatPlus AI…"} className="max-h-40 min-h-10 flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" />
             <button type="submit" disabled={busy || !input.trim()} aria-label="Send message" className="rounded-xl bg-indigo-600 p-3 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"><Send size={17}/></button>
           </div>
           <p className="mt-2 text-center text-[11px] text-slate-400">AI can make mistakes. Avoid sharing passwords, private keys, or sensitive personal information.</p>
