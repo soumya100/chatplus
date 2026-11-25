@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null)
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : ""
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 100) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 100) {
       return json({ message: "Enter a valid email address." }, 400)
     }
 
