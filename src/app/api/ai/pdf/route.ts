@@ -138,7 +138,6 @@ function createPdf(messages: ExportMessage[]): Buffer {
     for (const line of markdownLines(message.content)) {
       for (const wrapped of wrapLine(toPdfText(line), maxChars)) addLine(wrapped)
     }
-    if (message.imageData) addLine("[Image attachment omitted from this text export]")
     if (message.sources?.length) {
       addLine("Sources:")
       message.sources.forEach((source, sourceIndex) => {
