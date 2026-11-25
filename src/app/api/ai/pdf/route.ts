@@ -132,7 +132,7 @@ function pdfLiteral(value: string): string {
   return "(" + toPdfText(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)") + ")"
 }
 
-function readJpegDimensions(data: Buffer): { width: number; height: number } | null {
+function readJpegDimensions(data: Buffer): { width: number; height: number; components: number } | null {
   let offset = 2
   while (offset + 4 < data.length) {
     if (data[offset] !== 0xff) return null
