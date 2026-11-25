@@ -334,3 +334,21 @@ test("chat viewport owns message scrolling and keeps composer outside the scroll
   assert.match(messages, /overflow-y-auto overscroll-contain/);
   assert.match(input, /shrink-0 border-t/);
 });
+
+
+test("staging Redis keyspace prefix covers direct commands, Lua keys, pipelines, and REST reads", () => {
+  const namespace = read("src/lib/redis-keyspace.ts");
+  const client = read("src/lib/db.ts");
+  const rest = read("src/helpers/redis.ts");
+  const example = read(".env.example");
+
+  assert.match(namespace, /REDIS_KEY_PREFIX/);
+  assert.match(namespace, /prefixRedisKey/);
+  assert.match(namespace, /method === "eval"/);
+  assert.match(namespace, /namespaceRedisPipeline/);
+  assert.match(client, /prefixRedisCommandArgs/);
+  assert.match(client, /namespaceRedisPipeline/);
+  assert.match(rest, /prefixRedisCommandArgs/);
+  assert.match(example, /REDIS_KEY_PREFIX=staging:/);
+  assert.match(example, /Leave UNSET in production/);
+});
