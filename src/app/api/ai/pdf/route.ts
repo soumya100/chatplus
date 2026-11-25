@@ -25,7 +25,6 @@ const requestSchema = z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string().max(16000),
     sources: z.array(sourceSchema).max(5).optional(),
-    imageData: z.string().max(0).optional(),
   }).strict()).min(1).max(80),
 }).strict().refine(value => value.messages.some(message => message.role === "assistant" && (message.content.trim() || message.sources?.length)), {
   message: "Add at least one assistant response before exporting",
