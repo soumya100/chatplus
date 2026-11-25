@@ -20,6 +20,8 @@ export function prefixRedisKey(value: unknown): unknown {
 const multiKeyCommands = new Set([
     "del", "unlink", "exists", "touch", "mget", "pfcount",
     "sunion", "sinter", "sdiff", "sunionstore", "sinterstore", "sdiffstore",
+    "rename", "renamenx", "rpoplpush", "brpoplpush", "smove", "copy",
+    "zinterstore", "zunionstore", "zdiffstore",
 ])
 
 /** Prefix key arguments for the Redis commands used by this application. */
