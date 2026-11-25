@@ -140,9 +140,10 @@ export default function AIChat() {
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-indigo-600 p-3 text-white shadow-lg shadow-indigo-600/20"><Sparkles size={22} /></div>
-          <div><h1 className="text-xl font-bold text-slate-900 dark:text-white">{mode === "coding" ? "ChatPlus Code" : "ChatPlus AI"}</h1><p className="text-xs text-slate-500 dark:text-slate-400">Powered by NVIDIA Nemotron</p></div>
+          <div><h1 className="text-xl font-bold text-slate-900 dark:text-white">{mode === "coding" ? "ChatPlus Code" : "ChatPlus AI"}</h1><p className="text-xs text-slate-500 dark:text-slate-400">{imageMode ? "Powered by NVIDIA Cosmos3 Nano" : "Powered by NVIDIA Nemotron"}</p></div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {!imageMode && <>
           <label className="sr-only" htmlFor="ai-mode">Assistant mode</label>
           <div className="relative">
             <select id="ai-mode" value={mode} onChange={event => setMode(event.target.value as AssistantMode)} disabled={busy} className="max-w-[150px] appearance-none rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500 dark:border-white/10 dark:bg-zinc-900 dark:text-slate-200">
@@ -159,6 +160,7 @@ export default function AIChat() {
             </select>
             <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
+          </>}
           <button type="button" onClick={() => { setImageMode(value => !value); if (!imageMode) setWebSearch(false) }} disabled={busy} aria-pressed={imageMode} title={imageMode ? "Image generation is on" : "Create an image"} className={"inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition " + (imageMode ? "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-400/30 dark:bg-fuchsia-400/10 dark:text-fuchsia-200" : "border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5")}>\n            <ImageIcon size={15}/> Create image\n          </button>\n          {!imageMode && <button type="button" onClick={() => setWebSearch(value => !value)} disabled={busy} aria-pressed={webSearch} title={webSearch ? "Live web search is on" : "Turn on live web search"} className={"inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition " + (webSearch ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-400/30 dark:bg-indigo-400/10 dark:text-indigo-200" : "border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5")}>
             <Globe2 size={15}/> Search web
           </button>
