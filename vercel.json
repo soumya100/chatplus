@@ -2,7 +2,6 @@
   "git": {
     "deploymentEnabled": false
   },
-  "ignoreCommand": "exit 0",
   "crons": [
     {
       "path": "/api/cron/cleanup-expired-messages",
