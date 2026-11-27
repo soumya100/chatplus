@@ -56,8 +56,7 @@ export default function AIChat() {
       let answer = ""
       let sources: SearchSource[] = []
       const processEvent = (eventText: string) => {
-        for (const line of eventText.split("
-")) {
+        for (const line of eventText.split("\n")) {
           if (!line.startsWith("data:")) continue
           const data = line.slice(5).trim()
           if (!data || data === "[DONE]") continue
@@ -79,9 +78,7 @@ export default function AIChat() {
         const result = await reader.read()
         if (result.done) break
         buffer += decoder.decode(result.value, { stream: true })
-        const events = buffer.split("
-
-")
+        const events = buffer.split("\n\n")
         buffer = events.pop() || ""
         for (const eventText of events) processEvent(eventText)
       }
