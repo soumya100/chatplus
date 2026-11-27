@@ -377,6 +377,7 @@ test("AI PDF export is authenticated, bounded, quota-limited, and returns a priv
   assert.match(route, /private, no-store/);
   assert.match(route, /3_700_000/);
   assert.match(route, /buildPdf\(body\.messages, fontEntries\)/);
+  assert.match(route, /async function loadDocumentFonts/);
   assert.match(route, /buildDocumentPDFBytes/);
   assert.match(route, /direction: "auto"/);
   assert.match(ui, /fetch\("\/api\/ai\/pdf"/);
