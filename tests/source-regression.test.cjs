@@ -16,7 +16,7 @@ function walk(directory) {
 test("the API route inventory is complete and every route exports an HTTP handler", () => {
   const apiRoot = path.join(root, "src/app/api");
   const routes = walk(apiRoot).filter(file => /route\.(ts|js)$/.test(file));
-  assert.equal(routes.length, 41, "update this inventory assertion when adding or removing API routes");
+  assert.equal(routes.length, 42, "update this inventory assertion when adding or removing API routes");
 
   for (const file of routes) {
     const source = fs.readFileSync(file, "utf8");
@@ -364,4 +364,21 @@ test("AI image generation is authenticated, quota-limited, and uses the configur
   assert.match(route, /MAX_IMAGE_BYTES/);
   assert.match(ui, /fetch\("\/api\/ai\/images"/);
   assert.match(ui, /download="chatplus-generated-image\.jpg"/);
+});
+
+\ntest("AI PDF export is authenticated, bounded, quota-limited, and returns a private PDF attachment", () => {
+  const route = read("src/app/api/ai/pdf/route.ts");
+  const ui = read("src/components/ai/AIChat.tsx");
+  assert.match(route, /getServerSession\(authOptions\)/);
+  assert.match(route, /rateLimit\(session\.user\.id,\s*"ai-pdf-export"/);
+  assert.match(route, /AI_PDF_EXPORT_ENABLED/);
+  assert.match(route, /application\/pdf/);
+  assert.match(route, /Content-Disposition/);
+  assert.match(route, /private, no-store/);
+  assert.match(route, /48000/);
+  assert.match(route, /createPdf\(body\.messages\)/);
+  assert.match(ui, /fetch\("\/api\/ai\/pdf"/);
+  assert.match(ui, /Export PDF/);
+  assert.match(ui, /URL\.createObjectURL/);
+  assert.doesNotMatch(ui, /\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/);
 });
