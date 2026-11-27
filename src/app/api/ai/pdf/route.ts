@@ -172,12 +172,25 @@ function markdownBlocks(value: string): PdfBlock[] {
       continue
     }
 
-    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed)
-    if (heading) {
+    // Parse Markdown headings without a backtracking regex. The input is
+    // user-controlled conversation text, so keep this scan strictly linear.
+    let headingLevel = 0
+    while (headingLevel < trimmed.length && trimmed[headingLevel] === "#") {
+      headingLevel += 1
+    }
+    const headingText = trimmed.slice(headingLevel).trim()
+    const headingSeparator = trimmed[headingLevel]
+    if (
+      headingLevel >= 1 &&
+      headingLevel <= 3 &&
+      headingSeparator !== undefined &&
+      headingSeparator.trim() === "" &&
+      headingText.length > 0
+    ) {
       blocks.push({
         type: "heading",
-        text: heading[2],
-        level: heading[1].length as 1 | 2 | 3,
+        text: headingText,
+        level: headingLevel as 1 | 2 | 3,
       })
       continue
     }
