@@ -11,10 +11,12 @@ on:
   pull_request:
     branches:
       - main
+      - staging
       - feat/complete-group-experience
   push:
     branches:
       - main
+      - staging
   workflow_dispatch:
 
 permissions:
@@ -568,9 +570,11 @@ jobs:
     needs:
       - pr-quality-gate
     if: >-
-      github.event_name == 'pull_request' &&
       needs.pr-quality-gate.result == 'success' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      ((github.event_name == 'pull_request' &&
+        github.event.pull_request.base.ref == 'staging' &&
+        github.event.pull_request.head.repo.full_name == github.repository) ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/staging'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -592,7 +596,7 @@ jobs:
       - name: Checkout the exact commit that passed CI
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
