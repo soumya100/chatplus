@@ -193,6 +193,30 @@ function markdownBlocks(value: string): PdfBlock[] {
   return blocks
 }
 
+function readJpegDimensions(data: Buffer): { width: number; height: number; components: number } | null {
+  if (data.length < 4 || data[0] !== 0xff || data[1] !== 0xd8) return null
+  let offset = 2
+  while (offset + 4 < data.length) {
+    if (data[offset] !== 0xff) return null
+    const marker = data[offset + 1]
+    offset += 2
+    if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) continue
+    if (offset + 2 > data.length) return null
+    const segmentLength = data.readUInt16BE(offset)
+    if (segmentLength < 2 || offset + segmentLength > data.length) return null
+    if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker)) {
+      if (segmentLength < 8) return null
+      return {
+        height: data.readUInt16BE(offset + 3),
+        width: data.readUInt16BE(offset + 5),
+        components: data[offset + 7],
+      }
+    }
+    offset += segmentLength
+  }
+  return null
+}
+
 function buildPdf(messages: ExportMessage[], fontEntries: Awaited<ReturnType<typeof loadDocumentFonts>>): Uint8Array {
   const blocks: PdfBlock[] = [
     { type: "heading", text: "ChatPlus AI — Conversation export", level: 1 },
@@ -210,6 +234,12 @@ function buildPdf(messages: ExportMessage[], fontEntries: Awaited<ReturnType<typ
 
     if (message.imageData) {
       const imageBytes = Buffer.from(message.imageData.slice("data:image/jpeg;base64,".length), "base64")
+      const dimensions = readJpegDimensions(imageBytes)
+      if (!dimensions || dimensions.components !== 3 ||
+          dimensions.width < 1 || dimensions.height < 1 ||
+          dimensions.width > 12000 || dimensions.height > 12000) {
+        throw new Error("Generated image must be a valid RGB JPEG with supported dimensions")
+      }
       blocks.push({ type: "paragraph", text: "Generated image:" })
       blocks.push({
         type: "image",
