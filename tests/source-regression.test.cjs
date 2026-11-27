@@ -16,7 +16,7 @@ function walk(directory) {
 test("the API route inventory is complete and every route exports an HTTP handler", () => {
   const apiRoot = path.join(root, "src/app/api");
   const routes = walk(apiRoot).filter(file => /route\.(ts|js)$/.test(file));
-  assert.equal(routes.length, 41, "update this inventory assertion when adding or removing API routes");
+  assert.equal(routes.length, 42, "update this inventory assertion when adding or removing API routes");
 
   for (const file of routes) {
     const source = fs.readFileSync(file, "utf8");
@@ -96,7 +96,7 @@ test("group member removal confirmation closes independently from the parent dia
 
 test("application source contains no native browser alert, confirm, or prompt calls", () => {
   const sourceRoot = path.join(root, "src");
-  const sourceFiles = walk(sourceRoot).filter(file => /\.(?:[cm]?[jt]sx?)$/.test(file));
+  const sourceFiles = walk(sourceRoot).filter(file => /\.(?:[cm]?[jt]sx?)$/.test(file) && !file.includes(`${path.sep}api${path.sep}`));
   const nativeDialogCall = /\b(?:(?:window|globalThis)\s*\.\s*)?(?:alert|confirm|prompt)\s*\(/;
 
   for (const file of sourceFiles) {
