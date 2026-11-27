@@ -1,4 +1,9 @@
 import { getServerSession } from "next-auth"
+import {
+  buildDocumentPDFBytes,
+  loadFontData,
+  registerFonts,
+} from "pdfnative"
 import { z } from "zod"
 import { authOptions } from "@/lib/auth"
 import { rateLimit } from "@/lib/ratelimit"
@@ -7,8 +12,10 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const MAX_IMAGE_BYTES = 1.25 * 1024 * 1024
+const MAX_PDF_BYTES = 12 * 1024 * 1024
+
 const imageSchema = z.string().max(Math.ceil(MAX_IMAGE_BYTES * 4 / 3) + 64).refine(value => {
-  const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
+  const match = /^data:image\\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
   if (!match) return false
   const encoded = match[1]
   if (encoded.length % 4 !== 0) return false
@@ -40,238 +47,203 @@ const requestSchema = z.object({
     sources: z.array(sourceSchema).max(5).optional(),
     imageData: imageSchema.optional(),
   }).strict()).min(1).max(80),
-}).strict().refine(value => value.messages.some(message => message.role === "assistant" && (message.content.trim() || message.sources?.length || message.imageData)), {
+}).strict().refine(value => value.messages.some(message =>
+  message.role === "assistant" && (message.content.trim() || message.sources?.length || message.imageData)
+), {
   message: "Add at least one assistant response before exporting",
 }).refine(value => {
   const imageCount = value.messages.filter(message => message.imageData).length
   const total = value.messages.reduce((sum, message) =>
     sum + message.content.length + (message.imageData?.length || 0) +
-    (message.sources || []).reduce((sourceSum, source) => sourceSum + source.title.length + source.url.length + source.snippet.length, 0), 0)
+    (message.sources || []).reduce((sourceSum, source) =>
+      sourceSum + source.title.length + source.url.length + source.snippet.length, 0), 0)
   return imageCount <= 2 && total <= 3_700_000
 }, {
   message: "This conversation is too large to export. Export a shorter conversation with no more than two images.",
 })
 
 type ExportMessage = z.infer<typeof requestSchema>["messages"][number]
-type PageItem = { kind: "text"; value: string } | { kind: "image"; index: number; width: number; height: number }
-type PdfPage = { items: PageItem[]; images: number[] }
+type PdfBlock =
+  | { type: "heading"; text: string; level: 1 | 2 | 3 }
+  | { type: "paragraph"; text: string; direction?: "auto" }
+  | { type: "image"; data: Uint8Array; width: number; align: "center"; alt: string }
+  | { type: "spacer"; height: number }
 
-function toPdfText(value: string): string {
-  const replacements: Record<string, string> = {
-    "’": "'", "‘": "'", "“": '"', "”": '"', "–": "-", "—": "--",
-    "…": "...", "•": "*", "→": "->", "←": "<-", "✓": "[x]", "×": "x",
-    "©": "(c)", "®": "(R)", "™": "(TM)", "₹": "INR ",
-  }
-  return value.normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[’‘“”–—…•→←✓×©®™₹]/g, character => replacements[character] || "")
-    .replace(/[^\x20-\x7E]/g, "?")
+const FONT_LOADERS = {
+  ar: () => import("pdfnative/fonts/noto-arabic-data.js"),
+  he: () => import("pdfnative/fonts/noto-hebrew-data.js"),
+  hi: () => import("pdfnative/fonts/noto-devanagari-data.js"),
+  bn: () => import("pdfnative/fonts/noto-bengali-data.js"),
+  gu: () => import("pdfnative/fonts/noto-gujarati-data.js"),
+  pa: () => import("pdfnative/fonts/noto-gurmukhi-data.js"),
+  ta: () => import("pdfnative/fonts/noto-tamil-data.js"),
+  te: () => import("pdfnative/fonts/noto-telugu-data.js"),
+  kn: () => import("pdfnative/fonts/noto-kannada-data.js"),
+  ml: () => import("pdfnative/fonts/noto-malayalam-data.js"),
+  th: () => import("pdfnative/fonts/noto-thai-data.js"),
+  lo: () => import("pdfnative/fonts/noto-lao-data.js"),
+  km: () => import("pdfnative/fonts/noto-khmer-data.js"),
+  my: () => import("pdfnative/fonts/noto-myanmar-data.js"),
+  bo: () => import("pdfnative/fonts/noto-tibetan-data.js"),
+  ja: () => import("pdfnative/fonts/noto-jp-data.js"),
+  zh: () => import("pdfnative/fonts/noto-sc-data.js"),
+  ko: () => import("pdfnative/fonts/noto-kr-data.js"),
+  el: () => import("pdfnative/fonts/noto-greek-data.js"),
+  ru: () => import("pdfnative/fonts/noto-cyrillic-data.js"),
+  latin: () => import("pdfnative/fonts/noto-sans-data.js"),
+  emoji: () => import("pdfnative/fonts/noto-emoji-data.js"),
 }
 
-function markdownLines(value: string): string[] {
-  const lines: string[] = []
+type FontLanguage = keyof typeof FONT_LOADERS
+
+function getRequiredFontLanguages(texts: string[]): FontLanguage[] {
+  const allText = texts.join("\\n")
+  const required = new Set<FontLanguage>()
+  const has = (pattern: RegExp) => pattern.test(allText)
+
+  if (has(/[\\u0600-\\u06ff\\u0750-\\u077f\\u08a0-\\u08ff]/u)) required.add("ar")
+  if (has(/[\\u0590-\\u05ff\\uFB1D-\\uFB4F]/u)) required.add("he")
+  if (has(/[\\u0900-\\u097f]/u)) required.add("hi")
+  if (has(/[\\u0980-\\u09ff]/u)) required.add("bn")
+  if (has(/[\\u0a80-\\u0aff]/u)) required.add("gu")
+  if (has(/[\\u0a00-\\u0a7f]/u)) required.add("pa")
+  if (has(/[\\u0b80-\\u0bff]/u)) required.add("ta")
+  if (has(/[\\u0c00-\\u0c7f]/u)) required.add("te")
+  if (has(/[\\u0c80-\\u0cff]/u)) required.add("kn")
+  if (has(/[\\u0d00-\\u0d7f]/u)) required.add("ml")
+  if (has(/[\\u0e00-\\u0e7f]/u)) required.add("th")
+  if (has(/[\\u0e80-\\u0eff]/u)) required.add("lo")
+  if (has(/[\\u1780-\\u17ff]/u)) required.add("km")
+  if (has(/[\\u1000-\\u109f]/u)) required.add("my")
+  if (has(/[\\u0f00-\\u0fff]/u)) required.add("bo")
+  if (has(/[\\u3040-\\u30ff\\u31f0-\\u31ff\\u4e00-\\u9fff]/u)) required.add("ja")
+  if (has(/[\\u3400-\\u4dbf\\u4e00-\\u9fff]/u)) required.add("zh")
+  if (has(/[\\uac00-\\ud7af\\u1100-\\u11ff]/u)) required.add("ko")
+  if (has(/[\\u0370-\\u03ff\\u1f00-\\u1fff]/u)) required.add("el")
+  if (has(/[\\u0400-\\u052f]/u)) required.add("ru")
+  if (has(/[\\u0100-\\u024f\\u1e00-\\u1eff\\u0300-\\u036f]/u)) required.add("latin")
+  if (has(/[\\u{1f000}-\\u{1faff}]/u)) required.add("emoji")
+
+  return [...required]
+}
+
+async function loadDocumentFonts(texts: string[]) {
+  const languages = getRequiredFontLanguages(texts)
+  registerFonts(FONT_LOADERS)
+  const loaded = await Promise.all(languages.map(async lang => ({
+    lang,
+    fontData: await loadFontData(lang),
+  })))
+  return loaded
+    .filter((entry): entry is { lang: FontLanguage; fontData: NonNullable<typeof entry.fontData> } => Boolean(entry.fontData))
+    .map((entry, index) => ({
+      fontData: entry.fontData,
+      fontRef: `/F${index + 3}`,
+      lang: entry.lang,
+    }))
+}
+
+function markdownBlocks(value: string): PdfBlock[] {
+  const blocks: PdfBlock[] = []
   let inCode = false
-  for (const rawLine of value.replace(/\r/g, "").split("\n")) {
+  let codeLines: string[] = []
+
+  const flushCode = () => {
+    if (!codeLines.length) return
+    blocks.push({ type: "paragraph", text: codeLines.join("\\n") })
+    codeLines = []
+  }
+
+  for (const rawLine of value.replace(/\\r/g, "").split("\\n")) {
     const trimmed = rawLine.trim()
     if (/^`{3,}/.test(trimmed)) {
+      if (inCode) flushCode()
       inCode = !inCode
-      if (!inCode) lines.push("")
+      continue
+    }
+    if (inCode) {
+      codeLines.push(rawLine)
       continue
     }
     if (!trimmed) {
-      lines.push("")
+      blocks.push({ type: "spacer", height: 5 })
       continue
     }
+
+    const heading = /^(#{1,3})\\s+(.+)$/.exec(trimmed)
+    if (heading) {
+      blocks.push({
+        type: "heading",
+        text: heading[2],
+        level: heading[1].length as 1 | 2 | 3,
+      })
+      continue
+    }
+
     let line = rawLine
-    if (!inCode) {
-      line = line.replace(/^\s{0,3}#{1,6}\s+/, "")
-        .replace(/^\s*[-*+]\s+/, "• ")
-        .replace(/^\s*\d+[.)]\s+/, "• ")
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/\*(.*?)\*/g, "$1")
-        .replace(/__(.*?)__/g, "$1")
-        .replace(/_(.*?)_/g, "$1")
-        .replace(/`([^`]+)`/g, "$1")
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1 ($2)")
-    } else {
-      line = "    " + line
-    }
-    lines.push(line)
+      .replace(/^\\s*[-*+]\\s+/, "• ")
+      .replace(/^\\s*\\d+[.)]\\s+/, "• ")
+      .replace(/\\*\\*(.*?)\\*\\*/g, "$1")
+      .replace(/\\*(.*?)\\*/g, "$1")
+      .replace(/__(.*?)__/g, "$1")
+      .replace(/_(.*?)_/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)]+)\\)/g, "$1 ($2)")
+    blocks.push({ type: "paragraph", text: line, direction: "auto" })
   }
-  return lines
+  if (inCode) flushCode()
+  return blocks
 }
 
-function wrapLine(value: string, maxChars: number): string[] {
-  const words = value.split(/\s+/)
-  const output: string[] = []
-  let current = ""
-  for (const word of words) {
-    if (!word) continue
-    if (word.length > maxChars) {
-      if (current) output.push(current)
-      current = ""
-      for (let offset = 0; offset < word.length; offset += maxChars) {
-        const part = word.slice(offset, offset + maxChars)
-        if (part.length === maxChars) output.push(part)
-        else current = part
-      }
-      continue
-    }
-    if (!current) current = word
-    else if (current.length + word.length + 1 <= maxChars) current += " " + word
-    else {
-      output.push(current)
-      current = word
-    }
-  }
-  if (current) output.push(current)
-  return output.length ? output : [""]
-}
+function buildPdf(messages: ExportMessage[], fontEntries: Awaited<ReturnType<typeof loadDocumentFonts>>): Uint8Array {
+  const blocks: PdfBlock[] = [
+    { type: "heading", text: "ChatPlus AI — Conversation export", level: 1 },
+    { type: "paragraph", text: `Generated ${new Date().toISOString()}` },
+    { type: "spacer", height: 12 },
+  ]
 
-function pdfLiteral(value: string): string {
-  return "(" + toPdfText(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)") + ")"
-}
-
-function readJpegDimensions(data: Buffer): { width: number; height: number; components: number } | null {
-  let offset = 2
-  while (offset + 4 < data.length) {
-    if (data[offset] !== 0xff) return null
-    const marker = data[offset + 1]
-    offset += 2
-    if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) continue
-    if (offset + 2 > data.length) return null
-    const segmentLength = data.readUInt16BE(offset)
-    if (segmentLength < 2 || offset + segmentLength > data.length) return null
-    if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker)) {
-      if (segmentLength < 7) return null
-      return { height: data.readUInt16BE(offset + 3), width: data.readUInt16BE(offset + 5), components: data[offset + 7] }
-    }
-    offset += segmentLength
-  }
-  return null
-}
-
-function createPdf(messages: ExportMessage[]): Buffer {
-  const pageWidth = 595
-  const pageHeight = 842
-  const margin = 48
-  const lineHeight = 14
-  const maxChars = 92
-  const pages: PdfPage[] = [{ items: [], images: [] }]
-  let pageIndex = 0
-  let y = pageHeight - margin
-  const images: Buffer[] = []
-
-  const nextPage = () => {
-    pages.push({ items: [], images: [] })
-    pageIndex += 1
-    y = pageHeight - margin
-  }
-  const addText = (value: string) => {
-    if (y < margin + lineHeight) nextPage()
-    pages[pageIndex].items.push({ kind: "text", value })
-    y -= lineHeight
-  }
-  const addImage = (dataUrl: string) => {
-    const base64 = dataUrl.slice("data:image/jpeg;base64,".length)
-    const image = Buffer.from(base64, "base64")
-    const dimensions = readJpegDimensions(image)
-    if (!dimensions || dimensions.components !== 3 || dimensions.width < 1 || dimensions.height < 1 || dimensions.width > 12000 || dimensions.height > 12000) {
-      addText("[Image could not be embedded: unsupported JPEG dimensions]")
-      return
-    }
-    const maxWidth = pageWidth - margin * 2
-    const maxHeight = 300
-    const scale = Math.min(maxWidth / dimensions.width, maxHeight / dimensions.height, 1)
-    const width = dimensions.width * scale
-    const height = dimensions.height * scale
-    if (y - height < margin) nextPage()
-    const imageIndex = images.length
-    images.push(image)
-    pages[pageIndex].images.push(imageIndex)
-    pages[pageIndex].items.push({ kind: "image", index: imageIndex, width, height })
-    y -= height + 16
-  }
-
-  addText("ChatPlus AI - Conversation export")
-  addText("Generated " + new Date().toISOString())
-  addText("")
   messages.forEach((message, index) => {
-    addText((message.role === "user" ? "You" : "ChatPlus AI") + " - Message " + (index + 1))
-    for (const line of markdownLines(message.content)) {
-      for (const wrapped of wrapLine(toPdfText(line), maxChars)) addText(wrapped)
-    }
+    blocks.push({
+      type: "heading",
+      text: `${message.role === "user" ? "You" : "ChatPlus AI"} — Message ${index + 1}`,
+      level: 2,
+    })
+    blocks.push(...markdownBlocks(message.content))
+
     if (message.imageData) {
-      addText("Generated image:")
-      addImage(message.imageData)
-    }
-    if (message.sources?.length) {
-      addText("Sources:")
-      message.sources.forEach((source, sourceIndex) => {
-        addText("[" + (sourceIndex + 1) + "] " + source.title)
-        addText(source.url)
-        if (source.publishedDate) addText("Published: " + source.publishedDate)
-        for (const wrapped of wrapLine(source.snippet, maxChars)) addText(wrapped)
+      const imageBytes = Buffer.from(message.imageData.slice("data:image/jpeg;base64,".length), "base64")
+      blocks.push({ type: "paragraph", text: "Generated image:" })
+      blocks.push({
+        type: "image",
+        data: new Uint8Array(imageBytes),
+        width: 440,
+        align: "center",
+        alt: "Image generated in this ChatPlus conversation",
       })
     }
-    addText("")
-  })
 
-  const objects: Buffer[] = []
-  objects.push(Buffer.from("<< /Type /Catalog /Pages 2 0 R >>", "ascii"))
-  const pageObjectIds = pages.map((_, index) => 4 + index * 2)
-  objects.push(Buffer.from("<< /Type /Pages /Kids [" + pageObjectIds.map(id => id + " 0 R").join(" ") + "] /Count " + pages.length + " >>", "ascii"))
-  objects.push(Buffer.from("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>", "ascii"))
-
-  pages.forEach((page, index) => {
-    const pageObjectId = pageObjectIds[index]
-    const contentObjectId = pageObjectId + 1
-    const xObjects = page.images.map(imageIndex => "/Im" + imageIndex + " " + (4 + pages.length * 2 + imageIndex) + " 0 R").join(" ")
-    const resources = "<< /Font << /F1 3 0 R >>" + (xObjects ? " /XObject << " + xObjects + " >>" : "") + " >>"
-    objects.push(Buffer.from("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + pageWidth + " " + pageHeight + "] /Resources " + resources + " /Contents " + contentObjectId + " 0 R >>", "ascii"))
-
-    let cursorY = pageHeight - margin
-    const commands: string[] = []
-    for (const item of page.items) {
-      if (item.kind === "text") {
-        commands.push("BT /F1 10 Tf 1 0 0 1 " + margin + " " + cursorY + " Tm " + pdfLiteral(item.value) + " Tj ET")
-        cursorY -= lineHeight
-      } else {
-        const imageY = cursorY - item.height
-        commands.push("q " + item.width.toFixed(2) + " 0 0 " + item.height.toFixed(2) + " " + margin + " " + imageY.toFixed(2) + " cm /Im" + item.index + " Do Q")
-        cursorY = imageY - 16
-      }
+    if (message.sources?.length) {
+      blocks.push({ type: "heading", text: "Sources", level: 3 })
+      message.sources.forEach((source, sourceIndex) => {
+        blocks.push({ type: "paragraph", text: `[${sourceIndex + 1}] ${source.title}` })
+        blocks.push({ type: "paragraph", text: source.url })
+        if (source.publishedDate) blocks.push({ type: "paragraph", text: `Published: ${source.publishedDate}` })
+        blocks.push({ type: "paragraph", text: source.snippet })
+      })
     }
-    const content = Buffer.from(commands.join("\n"), "ascii")
-    objects.push(Buffer.concat([
-      Buffer.from("<< /Length " + content.length + " >>\nstream\n", "ascii"),
-      content,
-      Buffer.from("\nendstream", "ascii"),
-    ]))
+    blocks.push({ type: "spacer", height: 10 })
   })
 
-  images.forEach((image, index) => {
-    const dimensions = readJpegDimensions(image)!
-    const header = Buffer.from("<< /Type /XObject /Subtype /Image /Width " + dimensions.width + " /Height " + dimensions.height + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + image.length + " >>\nstream\n", "ascii")
-    objects.push(Buffer.concat([header, image, Buffer.from("\nendstream", "ascii")]))
+  return buildDocumentPDFBytes({
+    title: "ChatPlus AI conversation",
+    blocks,
+    fontEntries,
+  }, {
+    direction: "auto",
+    pageWidth: 595.28,
+    pageHeight: 841.89,
+    margins: { t: 48, r: 48, b: 48, l: 48 },
   })
-
-  const chunks: Buffer[] = [Buffer.from("%PDF-1.4\n", "ascii")]
-  const offsets = [0]
-  let byteLength = chunks[0].length
-  objects.forEach((object, index) => {
-    offsets.push(byteLength)
-    const prefix = Buffer.from((index + 1) + " 0 obj\n", "ascii")
-    const suffix = Buffer.from("\nendobj\n", "ascii")
-    chunks.push(prefix, object, suffix)
-    byteLength += prefix.length + object.length + suffix.length
-  })
-  const xrefOffset = byteLength
-  let xref = "xref\n0 " + (objects.length + 1) + "\n0000000000 65535 f \n"
-  offsets.slice(1).forEach(offset => { xref += String(offset).padStart(10, "0") + " 00000 n \n" })
-  xref += "trailer\n<< /Size " + (objects.length + 1) + " /Root 1 0 R >>\nstartxref\n" + xrefOffset + "\n%%EOF"
-  chunks.push(Buffer.from(xref, "ascii"))
-  return Buffer.concat(chunks)
 }
 
 export async function POST(request: Request) {
@@ -305,7 +277,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const pdf = createPdf(body.messages)
+    const texts = body.messages.flatMap(message => [
+      message.content,
+      ...(message.sources || []).flatMap(source => [source.title, source.url, source.snippet]),
+    ])
+    const fontEntries = await loadDocumentFonts(texts)
+    const pdf = buildPdf(body.messages, fontEntries)
+    if (pdf.byteLength > MAX_PDF_BYTES) {
+      return Response.json({ message: "The generated PDF is too large. Try exporting a shorter conversation." }, { status: 413 })
+    }
     return new Response(new Uint8Array(pdf), {
       status: 200,
       headers: {
