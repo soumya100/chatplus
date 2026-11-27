@@ -140,8 +140,9 @@ export default function AIChat() {
         body: JSON.stringify({
           messages: messages.map(message => ({
             role: message.role,
-            content: message.content || (message.imageData ? "[Generated image omitted from PDF export]" : ""),
+            content: message.content || (message.imageData ? "[Generated image attached]" : ""),
             ...(message.sources?.length ? { sources: message.sources } : {}),
+            ...(message.imageData ? { imageData: message.imageData } : {}),
           })),
         }),
       })
@@ -201,9 +202,12 @@ export default function AIChat() {
             <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
           </>}
-          <button type="button" onClick={() => { setImageMode(value => !value); if (!imageMode) setWebSearch(false) }} disabled={busy} aria-pressed={imageMode} title={imageMode ? "Image generation is on" : "Create an image"} className={"inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition " + (imageMode ? "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-400/30 dark:bg-fuchsia-400/10 dark:text-fuchsia-200" : "border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5")}>\n            <ImageIcon size={15}/> Create image\n          </button>\n          {!imageMode && <button type="button" onClick={() => setWebSearch(value => !value)} disabled={busy} aria-pressed={webSearch} title={webSearch ? "Live web search is on" : "Turn on live web search"} className={"inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition " + (webSearch ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-400/30 dark:bg-indigo-400/10 dark:text-indigo-200" : "border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5")}>
-            <Globe2 size={15}/> Search web
+          <button type="button" onClick={() => { setImageMode(value => !value); if (!imageMode) setWebSearch(false) }} disabled={busy} aria-pressed={imageMode} title={imageMode ? "Image generation is on" : "Create an image"} className={"inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition " + (imageMode ? "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-400/30 dark:bg-fuchsia-400/10 dark:text-fuchsia-200" : "border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5")}>
+            <ImageIcon size={15}/> Create image
           </button>
+          {!imageMode && <button type="button" onClick={() => setWebSearch(value => !value)} disabled={busy} aria-pressed={webSearch} title={webSearch ? "Live web search is on" : "Turn on live web search"} className={"inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition " + (webSearch ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-400/30 dark:bg-indigo-400/10 dark:text-indigo-200" : "border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5")}>
+            <Globe2 size={15}/> Search web
+          </button>}
           <button type="button" onClick={exportPdf} disabled={!messages.length || busy || exporting} title="Export conversation as PDF" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">{exporting ? <Loader2 size={14} className="animate-spin"/> : <FileText size={14}/>} <span className="hidden sm:inline">{exporting ? "Exporting…" : "Export PDF"}</span></button>
           <button type="button" onClick={clearChat} disabled={!messages.length && !busy} title="New chat" className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"><Trash2 size={16}/></button>
         </div>

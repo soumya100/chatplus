@@ -12,6 +12,7 @@ on:
     branches:
       - main
       - feat/complete-group-experience
+      - feat/ai-pdf-export
   push:
     branches:
       - main

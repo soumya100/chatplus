@@ -172,8 +172,9 @@ async function exerciseBrowser(name, browserType) {
   const requestFrameUrls = new WeakMap();
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("request", request => {
-    if (request.resourceType() !== "script") return;
     try {
+      // Track every resource, not only scripts. Browsers can legitimately
+      // cancel a favicon or other GET when its owning document is navigated.
       requestFrameUrls.set(request, request.frame().url());
     } catch {
       // Detached frames are still checked as failed requests below.
@@ -200,11 +201,15 @@ async function exerciseBrowser(name, browserType) {
     const isNextScriptChunk =
       request.resourceType() === "script" &&
       requestUrlObject.pathname.startsWith("/_next/static/chunks/");
+    const knownBrowserAbort = [
+      "net::ERR_ABORTED",
+      "NS_BINDING_ABORTED",
+      "Load request cancelled"
+    ].includes(errorText);
     const expectedNavigationAbort =
       request.method() === "GET" &&
-      ((isRscRequest && ["net::ERR_ABORTED", "NS_BINDING_ABORTED", "Load request cancelled"].includes(errorText)) ||
-        (isNextScriptChunk &&
-          ["net::ERR_ABORTED", "NS_BINDING_ABORTED", "Load request cancelled"].includes(errorText)));
+      knownBrowserAbort &&
+      (isRscRequest || isNextScriptChunk || supersededByNavigation);
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
