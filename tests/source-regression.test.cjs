@@ -16,7 +16,7 @@ function walk(directory) {
 test("the API route inventory is complete and every route exports an HTTP handler", () => {
   const apiRoot = path.join(root, "src/app/api");
   const routes = walk(apiRoot).filter(file => /route\.(ts|js)$/.test(file));
-  assert.equal(routes.length, 40, "update this inventory assertion when adding or removing API routes");
+  assert.equal(routes.length, 41, "update this inventory assertion when adding or removing API routes");
 
   for (const file of routes) {
     const source = fs.readFileSync(file, "utf8");
@@ -351,4 +351,17 @@ test("staging Redis keyspace prefix covers direct commands, Lua keys, pipelines,
   assert.match(rest, /prefixRedisCommandArgs/);
   assert.match(example, /REDIS_KEY_PREFIX=staging:/);
   assert.match(example, /Leave UNSET in production/);
+});
+
+test("AI image generation is authenticated, quota-limited, and uses the configured NVIDIA endpoint", () => {
+  const route = read("src/app/api/ai/images/route.ts");
+  const ui = read("src/components/ai/AIChat.tsx");
+  assert.match(route, /getServerSession\(authOptions\)/);
+  assert.match(route, /rateLimit\(session\.user\.id,\s*"ai-image-generation"/);
+  assert.match(route, /AI_IMAGE_GENERATION_ENABLED/);
+  assert.match(route, /https:\/\/ai\.api\.nvidia\.com\/v1\/cosmos\/nvidia\/cosmos3-nano/);
+  assert.match(route, /model_mode:\s*"text2image"/);
+  assert.match(route, /MAX_IMAGE_BYTES/);
+  assert.match(ui, /fetch\("\/api\/ai\/images"/);
+  assert.match(ui, /download="chatplus-generated-image\.jpg"/);
 });
