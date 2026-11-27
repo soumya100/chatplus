@@ -4,6 +4,7 @@ import {
   loadFontData,
   registerFonts,
 } from "pdfnative"
+import type { FontData } from "pdfnative"
 import { z } from "zod"
 import { authOptions } from "@/lib/auth"
 import { rateLimit } from "@/lib/ratelimit"
@@ -69,29 +70,32 @@ type PdfBlock =
   | { type: "image"; data: Uint8Array; width: number; align: "center"; alt: string }
   | { type: "spacer"; height: number }
 
-const FONT_LOADERS = {
-  ar: () => import("pdfnative/fonts/noto-arabic-data.js"),
-  he: () => import("pdfnative/fonts/noto-hebrew-data.js"),
-  hi: () => import("pdfnative/fonts/noto-devanagari-data.js"),
-  bn: () => import("pdfnative/fonts/noto-bengali-data.js"),
-  gu: () => import("pdfnative/fonts/noto-gujarati-data.js"),
-  pa: () => import("pdfnative/fonts/noto-gurmukhi-data.js"),
-  ta: () => import("pdfnative/fonts/noto-tamil-data.js"),
-  te: () => import("pdfnative/fonts/noto-telugu-data.js"),
-  kn: () => import("pdfnative/fonts/noto-kannada-data.js"),
-  ml: () => import("pdfnative/fonts/noto-malayalam-data.js"),
-  th: () => import("pdfnative/fonts/noto-thai-data.js"),
-  lo: () => import("pdfnative/fonts/noto-lao-data.js"),
-  km: () => import("pdfnative/fonts/noto-khmer-data.js"),
-  my: () => import("pdfnative/fonts/noto-myanmar-data.js"),
-  bo: () => import("pdfnative/fonts/noto-tibetan-data.js"),
-  ja: () => import("pdfnative/fonts/noto-jp-data.js"),
-  zh: () => import("pdfnative/fonts/noto-sc-data.js"),
-  ko: () => import("pdfnative/fonts/noto-kr-data.js"),
-  el: () => import("pdfnative/fonts/noto-greek-data.js"),
-  ru: () => import("pdfnative/fonts/noto-cyrillic-data.js"),
-  latin: () => import("pdfnative/fonts/noto-sans-data.js"),
-  emoji: () => import("pdfnative/fonts/noto-emoji-data.js"),
+const fontLoader = (load: () => Promise<unknown>) => async (): Promise<FontData> =>
+  await load() as FontData
+
+const FONT_LOADERS: Record<string, () => Promise<FontData>> = {
+  ar: fontLoader(() => import("pdfnative/fonts/noto-arabic-data.js")),
+  he: fontLoader(() => import("pdfnative/fonts/noto-hebrew-data.js")),
+  hi: fontLoader(() => import("pdfnative/fonts/noto-devanagari-data.js")),
+  bn: fontLoader(() => import("pdfnative/fonts/noto-bengali-data.js")),
+  gu: fontLoader(() => import("pdfnative/fonts/noto-gujarati-data.js")),
+  pa: fontLoader(() => import("pdfnative/fonts/noto-gurmukhi-data.js")),
+  ta: fontLoader(() => import("pdfnative/fonts/noto-tamil-data.js")),
+  te: fontLoader(() => import("pdfnative/fonts/noto-telugu-data.js")),
+  kn: fontLoader(() => import("pdfnative/fonts/noto-kannada-data.js")),
+  ml: fontLoader(() => import("pdfnative/fonts/noto-malayalam-data.js")),
+  th: fontLoader(() => import("pdfnative/fonts/noto-thai-data.js")),
+  lo: fontLoader(() => import("pdfnative/fonts/noto-lao-data.js")),
+  km: fontLoader(() => import("pdfnative/fonts/noto-khmer-data.js")),
+  my: fontLoader(() => import("pdfnative/fonts/noto-myanmar-data.js")),
+  bo: fontLoader(() => import("pdfnative/fonts/noto-tibetan-data.js")),
+  ja: fontLoader(() => import("pdfnative/fonts/noto-jp-data.js")),
+  zh: fontLoader(() => import("pdfnative/fonts/noto-sc-data.js")),
+  ko: fontLoader(() => import("pdfnative/fonts/noto-kr-data.js")),
+  el: fontLoader(() => import("pdfnative/fonts/noto-greek-data.js")),
+  ru: fontLoader(() => import("pdfnative/fonts/noto-cyrillic-data.js")),
+  latin: fontLoader(() => import("pdfnative/fonts/noto-sans-data.js")),
+  emoji: fontLoader(() => import("pdfnative/fonts/noto-emoji-data.js")),
 }
 
 type FontLanguage = keyof typeof FONT_LOADERS
