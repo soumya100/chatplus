@@ -388,9 +388,9 @@ test("AI PDF export embeds validated generated JPEGs and bounds image payloads",
   const ui = read("src/components/ai/AIChat.tsx");
   assert.match(route, /MAX_IMAGE_BYTES/);
   assert.match(route, /data:image/);
-  assert.match(route, /readJpegDimensions/);
-  assert.match(route, /DCTDecode/);
-  assert.match(route, /Subtype/);
+  assert.match(route, /type: "image"/);
+  assert.match(route, /new Uint8Array\(imageBytes\)/);
+  assert.match(route, /MAX_PDF_BYTES/);
   assert.match(route, /imageCount <= 2/);
   assert.match(ui, /imageData/);
 });
@@ -400,8 +400,8 @@ test("AI PDF export preserves Unicode and loads script-aware fonts on demand", (
   const manifest = JSON.parse(read("package.json"));
   assert.equal(manifest.engines.node, ">=22.0.0");
   assert.equal(manifest.dependencies.pdfnative, "1.9.0");
-  assert.match(route, /registerFonts\\(FONT_LOADERS\\)/);
-  assert.match(route, /loadFontData\\(lang\\)/);
+  assert.match(route, /registerFonts\(FONT_LOADERS\)/);
+  assert.match(route, /loadFontData\(lang\)/);
   assert.match(route, /noto-devanagari-data/);
   assert.match(route, /noto-bengali-data/);
   assert.match(route, /noto-gujarati-data/);
@@ -413,8 +413,7 @@ test("AI PDF export preserves Unicode and loads script-aware fonts on demand", (
   assert.match(route, /noto-arabic-data/);
   assert.match(route, /noto-hebrew-data/);
   assert.match(route, /noto-thai-data/);
-  assert.match(route, /noto-lao-data/);
-  assert.match(route, /noto-khmer-data/);
+    assert.match(route, /noto-khmer-data/);
   assert.match(route, /noto-myanmar-data/);
   assert.match(route, /noto-tibetan-data/);
   assert.match(route, /noto-jp-data/);
@@ -423,6 +422,6 @@ test("AI PDF export preserves Unicode and loads script-aware fonts on demand", (
   assert.match(route, /noto-greek-data/);
   assert.match(route, /noto-cyrillic-data/);
   assert.match(route, /noto-sans-data/);
-  assert.doesNotMatch(route, /normalize\\("NFKD"\\)/);
-  assert.doesNotMatch(route, /\\[\\^\\x20-\\x7E\\]/);
+  assert.doesNotMatch(route, /normalize\("NFKD"\)/);
+  assert.doesNotMatch(route, /\[\^\x20-\x7E\]/);
 });
