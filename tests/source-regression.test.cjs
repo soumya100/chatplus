@@ -390,6 +390,8 @@ test("AI PDF export embeds validated generated JPEGs and bounds image payloads",
   const ui = read("src/components/ai/AIChat.tsx");
   assert.match(route, /MAX_IMAGE_BYTES/);
   assert.match(route, /data:image/);
+  assert.match(route, /readJpegDimensions/);
+  assert.match(route, /dimensions\.components !== 3/);
   assert.match(route, /type: "image"/);
   assert.match(route, /new Uint8Array\(imageBytes\)/);
   assert.match(route, /MAX_PDF_BYTES/);
