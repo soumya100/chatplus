@@ -15,7 +15,7 @@ const MAX_IMAGE_BYTES = 1.25 * 1024 * 1024
 const MAX_PDF_BYTES = 12 * 1024 * 1024
 
 const imageSchema = z.string().max(Math.ceil(MAX_IMAGE_BYTES * 4 / 3) + 64).refine(value => {
-  const match = /^data:image\\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
+  const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
   if (!match) return false
   const encoded = match[1]
   if (encoded.length % 4 !== 0) return false
@@ -97,32 +97,32 @@ const FONT_LOADERS = {
 type FontLanguage = keyof typeof FONT_LOADERS
 
 function getRequiredFontLanguages(texts: string[]): FontLanguage[] {
-  const allText = texts.join("\\n")
+  const allText = texts.join("\n")
   const required = new Set<FontLanguage>()
   const has = (pattern: RegExp) => pattern.test(allText)
 
-  if (has(/[\\u0600-\\u06ff\\u0750-\\u077f\\u08a0-\\u08ff]/u)) required.add("ar")
-  if (has(/[\\u0590-\\u05ff\\uFB1D-\\uFB4F]/u)) required.add("he")
-  if (has(/[\\u0900-\\u097f]/u)) required.add("hi")
-  if (has(/[\\u0980-\\u09ff]/u)) required.add("bn")
-  if (has(/[\\u0a80-\\u0aff]/u)) required.add("gu")
-  if (has(/[\\u0a00-\\u0a7f]/u)) required.add("pa")
-  if (has(/[\\u0b80-\\u0bff]/u)) required.add("ta")
-  if (has(/[\\u0c00-\\u0c7f]/u)) required.add("te")
-  if (has(/[\\u0c80-\\u0cff]/u)) required.add("kn")
-  if (has(/[\\u0d00-\\u0d7f]/u)) required.add("ml")
-  if (has(/[\\u0e00-\\u0e7f]/u)) required.add("th")
-  if (has(/[\\u0e80-\\u0eff]/u)) required.add("lo")
-  if (has(/[\\u1780-\\u17ff]/u)) required.add("km")
-  if (has(/[\\u1000-\\u109f]/u)) required.add("my")
-  if (has(/[\\u0f00-\\u0fff]/u)) required.add("bo")
-  if (has(/[\\u3040-\\u30ff\\u31f0-\\u31ff\\u4e00-\\u9fff]/u)) required.add("ja")
-  if (has(/[\\u3400-\\u4dbf\\u4e00-\\u9fff]/u)) required.add("zh")
-  if (has(/[\\uac00-\\ud7af\\u1100-\\u11ff]/u)) required.add("ko")
-  if (has(/[\\u0370-\\u03ff\\u1f00-\\u1fff]/u)) required.add("el")
-  if (has(/[\\u0400-\\u052f]/u)) required.add("ru")
-  if (has(/[\\u0100-\\u024f\\u1e00-\\u1eff\\u0300-\\u036f]/u)) required.add("latin")
-  if (has(/[\\u{1f000}-\\u{1faff}]/u)) required.add("emoji")
+  if (has(/[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]/u)) required.add("ar")
+  if (has(/[\u0590-\u05ff\uFB1D-\uFB4F]/u)) required.add("he")
+  if (has(/[\u0900-\u097f]/u)) required.add("hi")
+  if (has(/[\u0980-\u09ff]/u)) required.add("bn")
+  if (has(/[\u0a80-\u0aff]/u)) required.add("gu")
+  if (has(/[\u0a00-\u0a7f]/u)) required.add("pa")
+  if (has(/[\u0b80-\u0bff]/u)) required.add("ta")
+  if (has(/[\u0c00-\u0c7f]/u)) required.add("te")
+  if (has(/[\u0c80-\u0cff]/u)) required.add("kn")
+  if (has(/[\u0d00-\u0d7f]/u)) required.add("ml")
+  if (has(/[\u0e00-\u0e7f]/u)) required.add("th")
+  if (has(/[\u0e80-\u0eff]/u)) required.add("lo")
+  if (has(/[\u1780-\u17ff]/u)) required.add("km")
+  if (has(/[\u1000-\u109f]/u)) required.add("my")
+  if (has(/[\u0f00-\u0fff]/u)) required.add("bo")
+  if (has(/[\u3040-\u30ff\u31f0-\u31ff\u4e00-\u9fff]/u)) required.add("ja")
+  if (has(/[\u3400-\u4dbf\u4e00-\u9fff]/u)) required.add("zh")
+  if (has(/[\uac00-\ud7af\u1100-\u11ff]/u)) required.add("ko")
+  if (has(/[\u0370-\u03ff\u1f00-\u1fff]/u)) required.add("el")
+  if (has(/[\u0400-\u052f]/u)) required.add("ru")
+  if (has(/[\u0100-\u024f\u1e00-\u1eff\u0300-\u036f]/u)) required.add("latin")
+  if (has(/[\u{1f000}-\u{1faff}]/u)) required.add("emoji")
 
   return [...required]
 }
@@ -150,11 +150,11 @@ function markdownBlocks(value: string): PdfBlock[] {
 
   const flushCode = () => {
     if (!codeLines.length) return
-    blocks.push({ type: "paragraph", text: codeLines.join("\\n") })
+    blocks.push({ type: "paragraph", text: codeLines.join("\n") })
     codeLines = []
   }
 
-  for (const rawLine of value.replace(/\\r/g, "").split("\\n")) {
+  for (const rawLine of value.replace(/\r/g, "").split("\n")) {
     const trimmed = rawLine.trim()
     if (/^`{3,}/.test(trimmed)) {
       if (inCode) flushCode()
@@ -170,7 +170,7 @@ function markdownBlocks(value: string): PdfBlock[] {
       continue
     }
 
-    const heading = /^(#{1,3})\\s+(.+)$/.exec(trimmed)
+    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed)
     if (heading) {
       blocks.push({
         type: "heading",
@@ -181,14 +181,14 @@ function markdownBlocks(value: string): PdfBlock[] {
     }
 
     let line = rawLine
-      .replace(/^\\s*[-*+]\\s+/, "• ")
-      .replace(/^\\s*\\d+[.)]\\s+/, "• ")
-      .replace(/\\*\\*(.*?)\\*\\*/g, "$1")
-      .replace(/\\*(.*?)\\*/g, "$1")
+      .replace(/^\s*[-*+]\s+/, "• ")
+      .replace(/^\s*\d+[.)]\s+/, "• ")
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/\*(.*?)\*/g, "$1")
       .replace(/__(.*?)__/g, "$1")
       .replace(/_(.*?)_/g, "$1")
       .replace(/`([^`]+)`/g, "$1")
-      .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)]+)\\)/g, "$1 ($2)")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1 ($2)")
     blocks.push({ type: "paragraph", text: line, direction: "auto" })
   }
   if (inCode) flushCode()
