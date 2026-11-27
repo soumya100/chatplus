@@ -59,10 +59,10 @@
     "@tanstack/react-virtual" "^3.0.0-beta.60"
     client-only "^0.0.1"
 
-"@hookform/resolvers@^7.0.8":
-  version "7.0.8"
-  resolved "https://registry.yarnpkg.com/@hookform/resolvers/-/resolvers-7.0.8.tgz#580a251b31002460189ca76ffe94409a7dbe0a77"
-  integrity sha512-44+R4PUy3MWIBJR4sOjW0bZaz+H81k26urkTYeXAvEa8h45ueHrvQpZR/96iyLOobL6/yO0BJTaRPwwyDlL1/A==
+"@hookform/resolvers@^7.0.9":
+  version "7.0.9"
+  resolved "https://registry.yarnpkg.com/@hookform/resolvers/-/resolvers-7.0.9.tgz#e7056f8d55641f79cee5b682c9f77f05fbcc79c0"
+  integrity sha512-Ir3c/wEDz3+bryCwavOP4i930LIAqBugJalnipVZnAR5zC2yGieRMHVLs1D5PxzJBwCmQB4WVAvNlo5HJMa2WQ==
   dependencies:
     "@standard-schema/utils" "^0.3.0"
 
@@ -2371,10 +2371,10 @@ lru-cache@^6.0.0:
   dependencies:
     yallist "^4.0.0"
 
-lucide-react@^0.316.0:
-  version "0.316.0"
-  resolved "https://registry.yarnpkg.com/lucide-react/-/lucide-react-0.316.0.tgz#df3a70515db81837496be255c534d8c9e3b18182"
-  integrity sha512-dTmYX1H4IXsRfVcj/KUxworV6814ApTl7iXaS21AimK2RUEl4j4AfOmqD3VR8phe5V91m4vEJ8tCK4uT1jE5nA==
+lucide-react@^1.81.0:
+  version "1.81.0"
+  resolved "https://registry.yarnpkg.com/lucide-react/-/lucide-react-1.81.0.tgz#504867d796e134e0554dd340dff5805a4c16b628"
+  integrity sha512-U+CisvFQ84m+xUJAKKA4q+mykGB1LAmu196hOblQbuNYJgD43iHwpmfYuqcFYHXJu2oqRih5JoH3f5LxwsUegg==
 
 math-intrinsics@^1.1.0:
   version "1.1.0"

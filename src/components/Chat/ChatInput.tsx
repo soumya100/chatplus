@@ -66,13 +66,11 @@ const ChatInput: FC<ChatInputProps> = ({
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null)
   const lastTypingSignal = useRef<number>(0)
 
-  // Focus textarea when replyingTo changes
+  // Focus textarea when replyingTo changes or on chat load without scrolling window
   useEffect(() => {
     setPendingRequestId(null)
-    if (replyingTo) {
-      textAreaRef.current?.focus()
-    }
-  }, [replyingTo])
+    textAreaRef.current?.focus({ preventScroll: true })
+  }, [replyingTo, chatId])
 
   // Single Responsibility: Voice message recorder hook
   const audioRecorder = useAudioRecorder({
@@ -390,18 +388,23 @@ const ChatInput: FC<ChatInputProps> = ({
         </div>
       ) : (
         /* Regular Chat Input Bar */
-        <div className='relative flex-1 overflow-hidden rounded-2xl shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-zinc-700 focus-within:ring-2 focus-within:ring-indigo-600 dark:bg-zinc-900'>
+        <div className='relative flex-1 overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-zinc-700 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600'>
+          <label htmlFor='chat-message-input' className='sr-only'>
+            Message {chatPartner}
+          </label>
           <TextareaAutosize
-            autoFocus
+            id='chat-message-input'
+            name='message'
             onKeyDown={enterPress}
             ref={textAreaRef}
             rows={1}
+            maxRows={6}
             value={input}
             onChange={handleInputChange}
             disabled={isLoading}
             placeholder={`Message ${chatPartner}...`}
             aria-label={`Message ${chatPartner}`}
-            className='block w-full h-full resize-none border-0 bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:ring-0 sm:py-2 sm:leading-6 sm:text-sm pl-3 pr-32'
+            className='block w-full resize-none border-0 bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:ring-0 text-sm leading-6 py-2.5 pl-4 pr-44 sm:pr-48 outline-none'
           />
 
           <div className='absolute right-2 bottom-1.5 flex items-center gap-0.5 sm:gap-1'>

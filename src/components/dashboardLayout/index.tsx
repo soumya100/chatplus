@@ -46,7 +46,9 @@ const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({
   }
 
   return (
-    <div className='w-full flex h-[100dvh] min-h-0 overflow-hidden bg-white dark:bg-zinc-950 text-gray-900 dark:text-gray-100'>
+    <div 
+      className='fixed inset-0 w-full flex h-full h-[100dvh] min-h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-950 text-gray-900 dark:text-gray-100'
+    >
       <div className="md:hidden">
         <MobileChatLayout 
           profileImage={currentAvatar}
@@ -77,7 +79,7 @@ const DashBoardLayoutIndex: FC<DashBoardLayoutIndexProps> = ({
         isSuperAdmin={isSuperAdmin}
         onOpenAvatarModal={handleOpenAvatarModal}
       />
-      <aside className='h-full min-h-0 min-w-0 flex-1 max-w-7xl mx-auto box-border px-4 sm:px-6 lg:px-8 py-4 md:py-4 w-full overflow-y-auto overscroll-contain bg-gray-50/50 dark:bg-zinc-950'>
+      <aside className='h-full min-h-0 min-w-0 flex-1 w-full overflow-y-auto overscroll-contain bg-gray-50/50 dark:bg-zinc-950'>
         {children}
       </aside>
 
