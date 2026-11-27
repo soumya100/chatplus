@@ -127,7 +127,7 @@ function getRequiredFontLanguages(texts: string[]): FontLanguage[] {
   return [...required]
 }
 
-async function loadDocumentFonts(texts: string[]) {
+async async function loadDocumentFonts(texts: string[]) {
   const languages = getRequiredFontLanguages(texts)
   registerFonts(FONT_LOADERS)
   const loaded = await Promise.all(languages.map(async lang => ({
