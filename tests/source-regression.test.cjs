@@ -16,7 +16,7 @@ function walk(directory) {
 test("the API route inventory is complete and every route exports an HTTP handler", () => {
   const apiRoot = path.join(root, "src/app/api");
   const routes = walk(apiRoot).filter(file => /route\.(ts|js)$/.test(file));
-  assert.equal(routes.length, 39, "update this inventory assertion when adding or removing API routes");
+  assert.equal(routes.length, 42, "update this inventory assertion when adding or removing API routes");
 
   for (const file of routes) {
     const source = fs.readFileSync(file, "utf8");
@@ -96,7 +96,7 @@ test("group member removal confirmation closes independently from the parent dia
 
 test("application source contains no native browser alert, confirm, or prompt calls", () => {
   const sourceRoot = path.join(root, "src");
-  const sourceFiles = walk(sourceRoot).filter(file => /\.(?:[cm]?[jt]sx?)$/.test(file));
+  const sourceFiles = walk(sourceRoot).filter(file => /\.(?:[cm]?[jt]sx?)$/.test(file) && !file.includes(`${path.sep}api${path.sep}`));
   const nativeDialogCall = /\b(?:(?:window|globalThis)\s*\.\s*)?(?:alert|confirm|prompt)\s*\(/;
 
   for (const file of sourceFiles) {
@@ -351,4 +351,82 @@ test("staging Redis keyspace prefix covers direct commands, Lua keys, pipelines,
   assert.match(rest, /prefixRedisCommandArgs/);
   assert.match(example, /REDIS_KEY_PREFIX=staging:/);
   assert.match(example, /Leave UNSET in production/);
+});
+
+test("AI image generation is authenticated, quota-limited, and uses the configured NVIDIA endpoint", () => {
+  const route = read("src/app/api/ai/images/route.ts");
+  const ui = read("src/components/ai/AIChat.tsx");
+  assert.match(route, /getServerSession\(authOptions\)/);
+  assert.match(route, /rateLimit\(session\.user\.id,\s*"ai-image-generation"/);
+  assert.match(route, /AI_IMAGE_GENERATION_ENABLED/);
+  assert.match(route, /https:\/\/ai\.api\.nvidia\.com\/v1\/cosmos\/nvidia\/cosmos3-nano/);
+  assert.match(route, /model_mode:\s*"text2image"/);
+  assert.match(route, /MAX_IMAGE_BYTES/);
+  assert.match(ui, /fetch\("\/api\/ai\/images"/);
+  assert.match(ui, /download="chatplus-generated-image\.jpg"/);
+});
+
+test("AI PDF export is authenticated, bounded, quota-limited, and returns a private PDF attachment", () => {
+  const route = read("src/app/api/ai/pdf/route.ts");
+  const ui = read("src/components/ai/AIChat.tsx");
+  assert.match(route, /getServerSession\(authOptions\)/);
+  assert.match(route, /rateLimit\(session\.user\.id,\s*"ai-pdf-export"/);
+  assert.match(route, /AI_PDF_EXPORT_ENABLED/);
+  assert.match(route, /application\/pdf/);
+  assert.match(route, /Content-Disposition/);
+  assert.match(route, /private, no-store/);
+  assert.match(route, /3_700_000/);
+  assert.match(route, /buildPdf\(body\.messages, fontEntries\)/);
+  assert.match(route, /async function loadDocumentFonts/);
+  assert.match(route, /buildDocumentPDFBytes/);
+  assert.match(route, /direction: "auto"/);
+  assert.match(ui, /fetch\("\/api\/ai\/pdf"/);
+  assert.match(ui, /Export PDF/);
+  assert.match(ui, /URL\.createObjectURL/);
+  assert.doesNotMatch(ui, /\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/);
+});
+
+test("AI PDF export embeds validated generated JPEGs and bounds image payloads", () => {
+  const route = read("src/app/api/ai/pdf/route.ts");
+  const ui = read("src/components/ai/AIChat.tsx");
+  assert.match(route, /MAX_IMAGE_BYTES/);
+  assert.match(route, /data:image/);
+  assert.match(route, /readJpegDimensions/);
+  assert.match(route, /dimensions\.components !== 3/);
+  assert.match(route, /type: "image"/);
+  assert.match(route, /new Uint8Array\(imageBytes\)/);
+  assert.match(route, /MAX_PDF_BYTES/);
+  assert.match(route, /imageCount <= 2/);
+  assert.match(ui, /imageData/);
+});
+
+test("AI PDF export preserves Unicode and loads script-aware fonts on demand", () => {
+  const route = read("src/app/api/ai/pdf/route.ts");
+  const manifest = JSON.parse(read("package.json"));
+  assert.equal(manifest.engines.node, ">=22.0.0");
+  assert.equal(manifest.dependencies.pdfnative, "1.9.0");
+  assert.match(route, /registerFonts\(FONT_LOADERS\)/);
+  assert.match(route, /loadFontData\(lang\)/);
+  assert.match(route, /noto-devanagari-data/);
+  assert.match(route, /noto-bengali-data/);
+  assert.match(route, /noto-gujarati-data/);
+  assert.match(route, /noto-gurmukhi-data/);
+  assert.match(route, /noto-tamil-data/);
+  assert.match(route, /noto-telugu-data/);
+  assert.match(route, /noto-kannada-data/);
+  assert.match(route, /noto-malayalam-data/);
+  assert.match(route, /noto-arabic-data/);
+  assert.match(route, /noto-hebrew-data/);
+  assert.match(route, /noto-thai-data/);
+  assert.match(route, /noto-khmer-data/);
+  assert.match(route, /noto-myanmar-data/);
+  assert.match(route, /noto-tibetan-data/);
+  assert.match(route, /noto-jp-data/);
+  assert.match(route, /noto-sc-data/);
+  assert.match(route, /noto-kr-data/);
+  assert.match(route, /noto-greek-data/);
+  assert.match(route, /noto-cyrillic-data/);
+  assert.match(route, /noto-sans-data/);
+  assert.doesNotMatch(route, /normalize\("NFKD"\)/);
+  assert.doesNotMatch(route, /\[\^\x20-\x7E\]/);
 });

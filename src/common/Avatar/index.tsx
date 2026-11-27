@@ -66,7 +66,7 @@ const Avatar: FC<AvatarProps> = ({
         )
     }
 
-    // Default Fallback: Username's first word initial
+    // Default Fallback: Username's first word initial for showing avatar
     return (
         <div
             className={`flex items-center justify-center rounded-full shrink-0 select-none bg-gradient-to-tr ${gradient} shadow-sm ${sizeClassName} ${className}`}
