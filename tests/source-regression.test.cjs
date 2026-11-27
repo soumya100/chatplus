@@ -376,7 +376,9 @@ test("AI PDF export is authenticated, bounded, quota-limited, and returns a priv
   assert.match(route, /Content-Disposition/);
   assert.match(route, /private, no-store/);
   assert.match(route, /3_700_000/);
-  assert.match(route, /createPdf\(body\.messages\)/);
+  assert.match(route, /buildPdf\(body\.messages, fontEntries\)/);
+  assert.match(route, /buildDocumentPDFBytes/);
+  assert.match(route, /direction: "auto"/);
   assert.match(ui, /fetch\("\/api\/ai\/pdf"/);
   assert.match(ui, /Export PDF/);
   assert.match(ui, /URL\.createObjectURL/);
@@ -413,7 +415,7 @@ test("AI PDF export preserves Unicode and loads script-aware fonts on demand", (
   assert.match(route, /noto-arabic-data/);
   assert.match(route, /noto-hebrew-data/);
   assert.match(route, /noto-thai-data/);
-    assert.match(route, /noto-khmer-data/);
+  assert.match(route, /noto-khmer-data/);
   assert.match(route, /noto-myanmar-data/);
   assert.match(route, /noto-tibetan-data/);
   assert.match(route, /noto-jp-data/);
