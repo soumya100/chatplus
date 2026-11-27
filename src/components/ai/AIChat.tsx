@@ -1,9 +1,10 @@
 "use client"
 
 import { FormEvent, useRef, useState } from "react"
-import { Bot, ChevronDown, Code2, Loader2, Send, Sparkles, Trash2, User } from "lucide-react"
+import { Bot, ChevronDown, Code2, Globe2, Loader2, Send, Sparkles, Trash2, User } from "lucide-react"
 
-type ChatMessage = { role: "user" | "assistant"; content: string }
+type SearchSource = { title: string; url: string; snippet: string; publishedDate?: string }
+type ChatMessage = { role: "user" | "assistant"; content: string; sources?: SearchSource[] }
 type Model = "lightning" | "super"
 type AssistantMode = "general" | "coding"
 
@@ -12,6 +13,7 @@ export default function AIChat() {
   const [input, setInput] = useState("")
   const [model, setModel] = useState<Model>("lightning")
   const [mode, setMode] = useState<AssistantMode>("general")
+  const [webSearch, setWebSearch] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const abortRef = useRef<AbortController | null>(null)
@@ -33,7 +35,7 @@ export default function AIChat() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, mode, messages: nextMessages.slice(-20) }),
+        body: JSON.stringify({ model, mode, webSearch, messages: nextMessages.slice(-20).map(({ role, content }) => ({ role, content })) }),
         signal: controller.signal,
       })
       if (!response.ok) {
@@ -45,27 +47,36 @@ export default function AIChat() {
       const decoder = new TextDecoder()
       let buffer = ""
       let answer = ""
+      let sources: SearchSource[] = []
+      const processEvent = (eventText: string) => {
+        for (const line of eventText.split("\n")) {
+          if (!line.startsWith("data:")) continue
+          const data = line.slice(5).trim()
+          if (!data || data === "[DONE]") continue
+          try {
+            const chunk = JSON.parse(data)
+            if (chunk.type === "sources" && Array.isArray(chunk.sources)) {
+              sources = chunk.sources
+              setMessages([...nextMessages, { role: "assistant", content: answer, sources }])
+              continue
+            }
+            answer += chunk.choices?.[0]?.delta?.content || ""
+            setMessages([...nextMessages, { role: "assistant", content: answer, sources }])
+          } catch {
+            // Ignore keep-alives and non-JSON event lines.
+          }
+        }
+      }
       while (true) {
         const result = await reader.read()
         if (result.done) break
         buffer += decoder.decode(result.value, { stream: true })
         const events = buffer.split("\n\n")
         buffer = events.pop() || ""
-        for (const eventText of events) {
-          for (const line of eventText.split("\n")) {
-            if (!line.startsWith("data:")) continue
-            const data = line.slice(5).trim()
-            if (!data || data === "[DONE]") continue
-            try {
-              const chunk = JSON.parse(data)
-              answer += chunk.choices?.[0]?.delta?.content || ""
-              setMessages([...nextMessages, { role: "assistant", content: answer }])
-            } catch {
-              // Ignore keep-alives and non-JSON event lines.
-            }
-          }
-        }
+        for (const eventText of events) processEvent(eventText)
       }
+      buffer += decoder.decode()
+      if (buffer.trim()) processEvent(buffer)
       if (!answer.trim()) throw new Error("The model returned an empty response. Please try again.")
     } catch (cause) {
       if (!controller.signal.aborted) {
@@ -110,6 +121,9 @@ export default function AIChat() {
             </select>
             <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
+          <button type="button" onClick={() => setWebSearch(value => !value)} disabled={busy} aria-pressed={webSearch} title={webSearch ? "Live web search is on" : "Turn on live web search"} className={"inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition " + (webSearch ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-400/30 dark:bg-indigo-400/10 dark:text-indigo-200" : "border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5")}>
+            <Globe2 size={15}/> Search web
+          </button>
           <button type="button" onClick={clearChat} disabled={!messages.length && !busy} title="New chat" className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"><Trash2 size={16}/></button>
         </div>
       </header>
@@ -125,8 +139,20 @@ export default function AIChat() {
           </div>}
           {messages.map((message, index) => <div key={index} className={"flex gap-3 " + (message.role === "user" ? "justify-end" : "justify-start")}>
             {message.role === "assistant" && <div className="mt-1 h-8 w-8 shrink-0 rounded-xl bg-indigo-600 p-2 text-white"><Bot size={16}/></div>}
-            <div className={"max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 " + (message.role === "user" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-slate-100")}>
-              {message.content || (busy && index === messages.length - 1 ? <span className="inline-flex items-center gap-2 text-slate-500"><Loader2 size={14} className="animate-spin"/> Thinking…</span> : null)}
+            <div className="flex max-w-[90%] min-w-0 flex-col items-start gap-2">
+              <div className={"max-w-full whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 " + (message.role === "user" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-slate-100")}>
+                {message.content || (busy && index === messages.length - 1 ? <span className="inline-flex items-center gap-2 text-slate-500"><Loader2 size={14} className="animate-spin"/> Searching and thinking…</span> : null)}
+              </div>
+              {message.sources?.length ? <div className="w-full rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-950">
+                <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300"><Globe2 size={13}/> Sources</p>
+                <div className="space-y-2">
+                  {message.sources.map((source, sourceIndex) => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className="block rounded-lg p-2 transition hover:bg-slate-50 dark:hover:bg-white/5">
+                    <span className="block text-xs font-semibold text-indigo-700 dark:text-indigo-300">[{sourceIndex + 1}] {source.title}</span>
+                    <span className="mt-1 block line-clamp-2 text-[11px] leading-4 text-slate-500 dark:text-slate-400">{source.snippet}</span>
+                    {source.publishedDate && <span className="mt-1 block text-[10px] text-slate-400">{source.publishedDate}</span>}
+                  </a>)}
+                </div>
+              </div> : null}
             </div>
             {message.role === "user" && <div className="mt-1 h-8 w-8 shrink-0 rounded-xl bg-slate-200 p-2 text-slate-600 dark:bg-zinc-700 dark:text-slate-200"><User size={16}/></div>}
           </div>)}
@@ -134,6 +160,7 @@ export default function AIChat() {
         </div>
         {error && <div role="alert" className="mx-4 mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">{error}</div>}
         <form onSubmit={submit} className="border-t border-slate-200 p-3 dark:border-white/10 sm:p-4">
+          {webSearch && <p className="mb-2 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-300"><Globe2 size={13}/> Live web search is on. Each message you send is shared with Tavily to find current sources.</p>}
           <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 focus-within:border-indigo-400 dark:border-white/10 dark:bg-zinc-950">
             <label className="sr-only" htmlFor="ai-prompt">Message ChatPlus AI</label>
             <textarea id="ai-prompt" value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(event as unknown as FormEvent) } }} rows={1} maxLength={12000} placeholder="Message ChatPlus AI…" className="max-h-40 min-h-10 flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" />
