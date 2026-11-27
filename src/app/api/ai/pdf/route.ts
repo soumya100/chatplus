@@ -134,13 +134,11 @@ async function loadDocumentFonts(texts: string[]) {
     lang,
     fontData: await loadFontData(lang),
   })))
-  return loaded
-    .filter((entry): entry is { lang: FontLanguage; fontData: NonNullable<typeof entry.fontData> } => Boolean(entry.fontData))
-    .map((entry, index) => ({
-      fontData: entry.fontData,
-      fontRef: `/F${index + 3}`,
-      lang: entry.lang,
-    }))
+  return loaded.flatMap((entry, index) => entry.fontData ? [{
+    fontData: entry.fontData,
+    fontRef: `/F${index + 3}`,
+    lang: entry.lang,
+  }] : [])
 }
 
 function markdownBlocks(value: string): PdfBlock[] {
