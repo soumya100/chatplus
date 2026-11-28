@@ -172,7 +172,8 @@ async function exerciseBrowser(name, browserType) {
   const requestFrameUrls = new WeakMap();
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("request", request => {
-    if (request.resourceType() !== "script") return;
+    // Track the owning document for every resource. A navigation may cancel
+    // an image, font, stylesheet, or script still loading for the old page.
     try {
       requestFrameUrls.set(request, request.frame().url());
     } catch {
@@ -197,14 +198,16 @@ async function exerciseBrowser(name, browserType) {
     // page and every other network error remain visible to the assertion.
     const requestUrlObject = new URL(requestUrl);
     const isRscRequest = requestUrlObject.searchParams.has("_rsc");
-    const isNextScriptChunk =
-      request.resourceType() === "script" &&
-      requestUrlObject.pathname.startsWith("/_next/static/chunks/");
+    const isNextStaticAsset = requestUrlObject.pathname.startsWith("/_next/static/");
+    const knownBrowserAbort = [
+      "net::ERR_ABORTED",
+      "NS_BINDING_ABORTED",
+      "Load request cancelled"
+    ].includes(errorText);
     const expectedNavigationAbort =
       request.method() === "GET" &&
-      ((isRscRequest && ["net::ERR_ABORTED", "NS_BINDING_ABORTED", "Load request cancelled"].includes(errorText)) ||
-        (isNextScriptChunk &&
-          ["net::ERR_ABORTED", "NS_BINDING_ABORTED", "Load request cancelled"].includes(errorText)));
+      knownBrowserAbort &&
+      (isRscRequest || (isNextStaticAsset && supersededByNavigation));
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
