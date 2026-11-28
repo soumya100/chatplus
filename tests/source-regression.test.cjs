@@ -360,7 +360,7 @@ test("AI image generation uses NVIDIA FLUX, persists results, and exposes retry 
   assert.match(route, /rateLimit\(session\.user\.id,\s*"ai-image-generation"/);
   assert.match(route, /AI_IMAGE_GENERATION_ENABLED/);
   assert.match(route, /https:\/\/ai\.api\.nvidia\.com\/v1\/genai\/black-forest-labs\/flux\.1-schnell/);
-  assert.match(route, /model:\s*"black-forest-labs\/flux\.1-dev"/);
+  assert.match(route, /model:\s*"black-forest-labs\/flux\.1-schnell"/);
   assert.match(route, /result\.artifacts\?\.\[0\]/);
   assert.match(route, /artifact\?\.base64/);
   assert.match(route, /finishReason === "CONTENT_FILTERED"/);
