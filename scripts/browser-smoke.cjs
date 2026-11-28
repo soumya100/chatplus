@@ -172,6 +172,8 @@ async function exerciseBrowser(name, browserType) {
   const requestFrameUrls = new WeakMap();
   page.on("pageerror", error => pageErrors.push(error.message));
   page.on("request", request => {
+    // Track the owning document for every resource. A navigation may cancel
+    // an image, font, stylesheet, or script still loading for the old page.
     try {
       // Track every resource, not only scripts. Browsers can legitimately
       // cancel a favicon or other GET when its owning document is navigated.
