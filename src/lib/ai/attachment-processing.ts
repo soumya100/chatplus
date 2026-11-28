@@ -286,10 +286,28 @@ export async function processAIAttachment(
   signal: AbortSignal,
 ): Promise<ProcessedAIAttachment> {
   if (!isOwnedBlobUrl(attachment.url)) throw new Error("An attachment URL is invalid.")
-  const owner = await db.get("ai:attachment-owner:" + attachment.url)
-  if (owner !== userId) throw new Error("This attachment is not owned by the signed-in account.")
+  // The client URL is used only as an ownership lookup key. Fetch the canonical
+  // URL recorded by the trusted upload-completion callback, never the request value.
+  const ownershipRecord = await db.get("ai:attachment-owner:" + attachment.url)
+  let ownership: { userId?: string; url?: string } | null = null
+  try {
+    ownership = (typeof ownershipRecord === "string"
+      ? JSON.parse(ownershipRecord)
+      : ownershipRecord) as { userId?: string; url?: string } | null
+  } catch {
+    ownership = null
+  }
+  if (
+    !ownership
+    || ownership.userId !== userId
+    || typeof ownership.url !== "string"
+    || !isOwnedBlobUrl(ownership.url)
+  ) {
+    throw new Error("This attachment is not owned by the signed-in account. Please upload it again.")
+  }
+  const blobUrl = ownership.url
 
-  const head = await fetch(attachment.url, { method: "HEAD", signal, cache: "no-store" })
+  const head = await fetch(blobUrl, { method: "HEAD", redirect: "error", signal, cache: "no-store" })
   if (!head.ok) throw new Error("Unable to read " + attachment.fileName + " from file storage.")
   const actualMime = (head.headers.get("content-type") || "application/octet-stream").split(";")[0].trim().toLowerCase()
   const actualSize = Number(head.headers.get("content-length") || attachment.fileSize)
@@ -301,7 +319,7 @@ export async function processAIAttachment(
     if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(actualMime)) {
       throw new Error(attachment.fileName + " is not a supported raster image.")
     }
-    const imageResponse = await fetch(attachment.url, { signal, cache: "no-store" })
+    const imageResponse = await fetch(blobUrl, { redirect: "error", signal, cache: "no-store" })
     if (!imageResponse.ok) throw new Error("Unable to validate " + attachment.fileName + ".")
     const imageBytes = Buffer.from(await imageResponse.arrayBuffer())
     const isPng = actualMime === "image/png" && imageBytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
@@ -309,7 +327,7 @@ export async function processAIAttachment(
     const isGif = actualMime === "image/gif" && ["GIF87a", "GIF89a"].includes(imageBytes.subarray(0, 6).toString("ascii"))
     const isWebp = actualMime === "image/webp" && imageBytes.subarray(0, 4).toString("ascii") === "RIFF" && imageBytes.subarray(8, 12).toString("ascii") === "WEBP"
     if (!isPng && !isJpeg && !isGif && !isWebp) throw new Error(attachment.fileName + " does not match its declared image type.")
-    return { attachment, actualSize, imageUrl: attachment.url }
+    return { attachment, actualSize, imageUrl: blobUrl }
   }
 
   if (attachment.kind === "generic") {
@@ -320,7 +338,7 @@ export async function processAIAttachment(
     }
   }
 
-  const response = await fetch(attachment.url, { signal, cache: "no-store" })
+  const response = await fetch(blobUrl, { redirect: "error", signal, cache: "no-store" })
   if (!response.ok) throw new Error("Unable to download " + attachment.fileName + " for processing.")
   const bytes = Buffer.from(await response.arrayBuffer())
   if (bytes.length > MAX_FILE_SIZE) throw new Error(attachment.fileName + " exceeds the 15 MiB processing limit.")
