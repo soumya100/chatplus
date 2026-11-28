@@ -545,7 +545,7 @@ jobs:
           SUPPLY_CHAIN: ${{ needs.supply-chain-security.result }}
           CODEQL: ${{ needs.codeql.result }}
         run: |
-          printf '%s\\n' \
+          printf '%s\n' \
             "unit/static: $UNIT_STATIC" \
             "real Redis: $REDIS_INTEGRATION" \
             "build/browser smoke: $BUILD_BROWSER_SMOKE" \
@@ -577,12 +577,12 @@ jobs:
     steps:
       - name: Verify Vercel deployment credentials
         env:
-          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
-            if [ -z "\${!name}" ]; then
+            if [ -z "${!name}" ]; then
               echo "::error::Missing GitHub Actions secret: $name"
               exit 1
             fi
@@ -591,7 +591,7 @@ jobs:
       - name: Checkout staging commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
@@ -604,15 +604,15 @@ jobs:
 
       - name: Link Vercel project
         env:
-          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
       - name: Deploy Preview with Vercel remote build
         env:
-          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel deploy --yes --token="$VERCEL_TOKEN"
 
   deploy-vercel-production:
@@ -628,12 +628,12 @@ jobs:
     steps:
       - name: Verify Vercel deployment credentials
         env:
-          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
-            if [ -z "\${!name}" ]; then
+            if [ -z "${!name}" ]; then
               echo "::error::Missing GitHub Actions secret: $name"
               exit 1
             fi
@@ -642,7 +642,7 @@ jobs:
       - name: Checkout main commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
@@ -655,13 +655,13 @@ jobs:
 
       - name: Link Vercel project
         env:
-          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
       - name: Deploy Production with Vercel remote build
         env:
-          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel deploy --yes --prod --token="$VERCEL_TOKEN"
