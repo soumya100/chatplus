@@ -200,6 +200,9 @@ async function exerciseBrowser(name, browserType) {
     // page and every other network error remain visible to the assertion.
     const requestUrlObject = new URL(requestUrl);
     const isRscRequest = requestUrlObject.searchParams.has("_rsc");
+    // Firefox can abort its browser-managed favicon request while the test navigates between pages.
+    // This is not an application resource failure; only known GET cancellation errors are ignored.
+    const isFaviconRequest = /\/(?:icon\.svg|favicon\.ico)$/.test(requestUrlObject.pathname);
     const isNextScriptChunk =
       request.resourceType() === "script" &&
       requestUrlObject.pathname.startsWith("/_next/static/chunks/");
@@ -211,7 +214,7 @@ async function exerciseBrowser(name, browserType) {
     const expectedNavigationAbort =
       request.method() === "GET" &&
       knownBrowserAbort &&
-      (isRscRequest || isNextScriptChunk || supersededByNavigation);
+      (isRscRequest || isFaviconRequest || isNextScriptChunk || supersededByNavigation);
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
