@@ -24,7 +24,7 @@ const attachmentSchema = z.object({
 
 const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().max(12_000),
+  content: z.string().max(40_000),
   createdAt: z.string().max(40).optional(),
   attachments: z.array(attachmentSchema).max(5).optional(),
   sources: z.array(z.object({
@@ -58,19 +58,26 @@ async function summarizeIncremental(
   const apiKey = process.env.NVIDIA_API_KEY
   if (!apiKey || !messages.length) return null
 
-  const compactMessages = messages.map(message => ({
-    role: message.role,
-    content: message.content.slice(0, 4_000),
-    ...(message.attachments?.length ? {
-      attachments: message.attachments.map(item => ({
-        fileName: item.fileName,
-        kind: item.kind,
-      })),
-    } : {}),
-    ...(message.imagePrompt ? { imagePrompt: message.imagePrompt } : {}),
-  }))
-  let serialized = JSON.stringify(compactMessages)
-  if (serialized.length > 32_000) serialized = serialized.slice(0, 32_000) + '"]'
+  let remainingChars = 28_000
+  const compactMessages = messages.map(message => {
+    const content = message.content.length <= 4_000
+      ? message.content
+      : message.content.slice(0, 2_500) + "\\n[Middle omitted]\\n" + message.content.slice(-1_400)
+    const boundedContent = content.slice(0, remainingChars)
+    remainingChars = Math.max(0, remainingChars - boundedContent.length)
+    return {
+      role: message.role,
+      content: boundedContent,
+      ...(message.attachments?.length ? {
+        attachments: message.attachments.map(item => ({
+          fileName: item.fileName,
+          kind: item.kind,
+        })),
+      } : {}),
+      ...(message.imagePrompt ? { imagePrompt: message.imagePrompt } : {}),
+    }
+  })
+  const serialized = JSON.stringify(compactMessages)
 
   try {
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
