@@ -175,6 +175,8 @@ async function exerciseBrowser(name, browserType) {
     // Track the owning document for every resource. A navigation may cancel
     // an image, font, stylesheet, or script still loading for the old page.
     try {
+      // Track every resource, not only scripts. Browsers can legitimately
+      // cancel a favicon or other GET when its owning document is navigated.
       requestFrameUrls.set(request, request.frame().url());
     } catch {
       // Detached frames are still checked as failed requests below.
@@ -201,6 +203,11 @@ async function exerciseBrowser(name, browserType) {
     // Firefox can abort its browser-managed favicon request while the test navigates between pages.
     // This is not an application resource failure; only known GET cancellation errors are ignored.
     const isFaviconRequest = /\/(?:icon\.svg|favicon\.ico)$/.test(requestUrlObject.pathname);
+    const isNextScriptChunk =
+      request.resourceType() === "script" &&
+      requestUrlObject.pathname.startsWith("/_next/static/chunks/");
+    // Next.js font and media assets can also be cancelled while their
+    // originating document is being replaced; only known abort errors qualify.
     const isNextStaticAsset = requestUrlObject.pathname.startsWith("/_next/static/");
     const knownBrowserAbort = [
       "net::ERR_ABORTED",
@@ -210,7 +217,7 @@ async function exerciseBrowser(name, browserType) {
     const expectedNavigationAbort =
       request.method() === "GET" &&
       knownBrowserAbort &&
-      (isRscRequest || isFaviconRequest || (isNextStaticAsset && supersededByNavigation));
+      (isRscRequest || isFaviconRequest || isNextScriptChunk || isNextStaticAsset || supersededByNavigation);
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }

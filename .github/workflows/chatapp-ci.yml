@@ -11,7 +11,9 @@ on:
   pull_request:
     branches:
       - main
+      - staging
       - feat/complete-group-experience
+      - feat/ai-pdf-export
   push:
     branches:
       - main

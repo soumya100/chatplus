@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "react-loading-skeleton/dist/skeleton.css";
 import { Provider } from "@/common";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
