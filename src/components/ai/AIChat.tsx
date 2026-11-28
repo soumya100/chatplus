@@ -87,12 +87,13 @@ export default function AIChat() {
 
   async function persistConversation(nextMessages: ChatMessage[]) {
     try {
+      const droppedMessages = Math.max(0, nextMessages.length - 500)
       const response = await fetch("/api/ai/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           summary: conversationSummary,
-          summaryThrough,
+          summaryThrough: Math.max(0, summaryThrough - droppedMessages),
           messages: nextMessages.slice(-500).map(message => ({
             role: message.role,
             content: message.content,
@@ -107,7 +108,7 @@ export default function AIChat() {
       if (!response.ok) throw new Error("Conversation history save failed")
       const saved = await response.json()
       if (typeof saved.summary === "string") setConversationSummary(saved.summary)
-      if (typeof saved.summaryThrough === "number") setSummaryThrough(saved.summaryThrough)
+      if (typeof saved.summaryThrough === "number") setSummaryThrough(saved.summaryThrough + droppedMessages)
     } catch {
       setError("Your response is ready, but conversation history could not be saved.")
     }
