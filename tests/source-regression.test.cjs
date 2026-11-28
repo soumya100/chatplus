@@ -353,17 +353,27 @@ test("staging Redis keyspace prefix covers direct commands, Lua keys, pipelines,
   assert.match(example, /Leave UNSET in production/);
 });
 
-test("AI image generation is authenticated, quota-limited, and uses the configured NVIDIA endpoint", () => {
+test("AI image generation uses NVIDIA FLUX, persists results, and exposes retry and download actions", () => {
   const route = read("src/app/api/ai/images/route.ts");
   const ui = read("src/components/ai/AIChat.tsx");
   assert.match(route, /getServerSession\(authOptions\)/);
   assert.match(route, /rateLimit\(session\.user\.id,\s*"ai-image-generation"/);
   assert.match(route, /AI_IMAGE_GENERATION_ENABLED/);
-  assert.match(route, /https:\/\/ai\.api\.nvidia\.com\/v1\/cosmos\/nvidia\/cosmos3-nano/);
-  assert.match(route, /model_mode:\s*"text2image"/);
+  assert.match(route, /https:\/\/ai\.api\.nvidia\.com\/v1\/genai\/black-forest-labs\/flux\.1-dev/);
+  assert.match(route, /model:\s*"black-forest-labs\/flux\.1-dev"/);
+  assert.match(route, /result\.artifacts\?\.\[0\]/);
+  assert.match(route, /artifact\?\.base64/);
+  assert.match(route, /AbortSignal\.timeout/);
   assert.match(route, /MAX_IMAGE_BYTES/);
+  assert.match(route, /await put\(/);
+  assert.match(route, /ai:generated-images:/);
+  assert.match(route, /export async function GET/);
   assert.match(ui, /fetch\("\/api\/ai\/images"/);
+  assert.match(ui, /Retry image/);
+  assert.match(ui, /Open full size/);
+  assert.match(ui, /Regenerate/);
   assert.match(ui, /download="chatplus-generated-image\.jpg"/);
+  assert.match(ui, /imagePending/);
 });
 
 test("AI PDF export is authenticated, bounded, quota-limited, and returns a private PDF attachment", () => {

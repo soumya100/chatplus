@@ -1,11 +1,11 @@
 "use client"
 
-import { FormEvent, useRef, useState } from "react"
+import { FormEvent, useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { Bot, ChevronDown, Code2, Download, FileText, Globe2, Image as ImageIcon, Loader2, Send, Sparkles, Trash2, User, Wand2 } from "lucide-react"
 
 type SearchSource = { title: string; url: string; snippet: string; publishedDate?: string }
-type ChatMessage = { role: "user" | "assistant"; content: string; sources?: SearchSource[]; imageData?: string }
+type ChatMessage = { role: "user" | "assistant"; content: string; sources?: SearchSource[]; imageData?: string; imagePending?: boolean; imagePrompt?: string }
 type Model = "lightning" | "super"
 type AssistantMode = "general" | "coding"
 
@@ -16,12 +16,33 @@ export default function AIChat() {
   const [mode, setMode] = useState<AssistantMode>("general")
   const [webSearch, setWebSearch] = useState(false)
   const [imageMode, setImageMode] = useState(false)
-  const [imageResolution, setImageResolution] = useState("720_1_1")
   const [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState("")
+  const [lastImagePrompt, setLastImagePrompt] = useState("")
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let active = true
+    fetch("/api/ai/images", { cache: "no-store" })
+      .then(async response => response.ok ? response.json() : null)
+      .then(payload => {
+        if (!active || !Array.isArray(payload?.images)) return
+        const restored: ChatMessage[] = payload.images.slice().reverse().flatMap((item: { prompt?: string; imageUrl?: string }) => {
+          if (typeof item.prompt !== "string" || typeof item.imageUrl !== "string") return []
+          return [
+            { role: "user" as const, content: "Create an image: " + item.prompt },
+            { role: "assistant" as const, content: "", imageData: item.imageUrl, imagePrompt: item.prompt },
+          ]
+        })
+        if (restored.length) setMessages(current => current.length ? current : restored)
+      })
+      .catch(() => {
+        // Image history is best-effort; it must not block a new chat.
+      })
+    return () => { active = false }
+  }, [])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -98,11 +119,14 @@ export default function AIChat() {
     }
   }
 
-  async function generateImage(prompt: string) {
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: "Create an image: " + prompt }]
-    setMessages(nextMessages)
+  async function generateImage(prompt: string, appendUserMessage = true) {
+    const nextMessages: ChatMessage[] = appendUserMessage
+      ? [...messages, { role: "user", content: "Create an image: " + prompt }]
+      : messages
+    setMessages([...nextMessages, { role: "assistant", content: "", imagePending: true }])
     setInput("")
     setError("")
+    setLastImagePrompt(prompt)
     setBusy(true)
     const controller = new AbortController()
     abortRef.current = controller
@@ -110,16 +134,18 @@ export default function AIChat() {
       const response = await fetch("/api/ai/images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, resolution: imageResolution }),
+        body: JSON.stringify({ prompt }),
         signal: controller.signal,
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.message || "Unable to generate image")
-      if (typeof payload.image !== "string" || !payload.image.startsWith("data:image/jpeg;base64,")) {
-        throw new Error("The image provider returned an invalid image")
+      if (typeof payload.image !== "string" || !/^https:\/\//.test(payload.image)) {
+        throw new Error("The image provider returned an invalid image URL")
       }
-      setMessages([...nextMessages, { role: "assistant", content: "", imageData: payload.image }])
+      setMessages([...nextMessages, { role: "assistant", content: "", imageData: payload.image, imagePrompt: prompt }])
+      setLastImagePrompt("")
     } catch (cause) {
+      setMessages(nextMessages)
       if (!controller.signal.aborted) {
         setError(cause instanceof Error ? cause.message : "Image generation failed")
       }
@@ -182,7 +208,7 @@ export default function AIChat() {
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-indigo-600 p-3 text-white shadow-lg shadow-indigo-600/20"><Sparkles size={22} /></div>
-          <div><h1 className="text-xl font-bold text-slate-900 dark:text-white">{mode === "coding" ? "ChatPlus Code" : "ChatPlus AI"}</h1><p className="text-xs text-slate-500 dark:text-slate-400">{imageMode ? "Powered by NVIDIA Cosmos3 Nano" : "Powered by NVIDIA Nemotron"}</p></div>
+          <div><h1 className="text-xl font-bold text-slate-900 dark:text-white">{mode === "coding" ? "ChatPlus Code" : "ChatPlus AI"}</h1><p className="text-xs text-slate-500 dark:text-slate-400">{imageMode ? "Powered by NVIDIA FLUX.1-dev" : "Powered by NVIDIA Nemotron"}</p></div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!imageMode && <>
@@ -218,7 +244,7 @@ export default function AIChat() {
           {!messages.length && <div className="mx-auto flex min-h-full max-w-xl flex-col items-center justify-center text-center">
             <div className="mb-4 rounded-full bg-indigo-50 p-4 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-300">{imageMode ? <ImageIcon size={30}/> : mode === "coding" ? <Code2 size={30}/> : <Bot size={30}/>}</div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{imageMode ? "What would you like to create?" : mode === "coding" ? "What are we building or debugging?" : "What would you like to explore?"}</h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{imageMode ? "Describe the image you have in mind. ChatPlus will generate a JPEG you can save." : mode === "coding" ? "Get help writing, debugging, refactoring, testing, and reviewing code." : "Ask questions, brainstorm ideas, or switch to Coding assistant for software engineering help."}</p>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{imageMode ? "Describe the image you have in mind. ChatPlus generates and saves your image to your account." : mode === "coding" ? "Get help writing, debugging, refactoring, testing, and reviewing code." : "Ask questions, brainstorm ideas, or switch to Coding assistant for software engineering help."}</p>
             <div className="mt-6 grid w-full gap-2 text-left sm:grid-cols-2">
               {(imageMode ? ["A cinematic mountain landscape at golden hour","A minimal futuristic workspace, warm lighting","A watercolor illustration of a quiet Japanese street","A product photograph of a glass perfume bottle"] : mode === "coding" ? ["Debug this error and explain the root cause","Review this code for bugs and security issues","Write unit tests for this function","Refactor this component for maintainability"] : ["Explain a tricky programming concept","Help me brainstorm an idea","Plan a learning roadmap","Summarize a technical topic"]).map(suggestion => <button key={suggestion} type="button" onClick={() => setInput(suggestion)} className="rounded-xl border border-slate-200 p-3 text-sm text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-white/10 dark:text-slate-300 dark:hover:bg-indigo-400/10">{suggestion}</button>)}
             </div>
@@ -229,10 +255,18 @@ export default function AIChat() {
               <div className={"max-w-full whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 " + (message.role === "user" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-slate-100")}>
                 {message.content || (busy && index === messages.length - 1 ? <span className="inline-flex items-center gap-2 text-slate-500"><Loader2 size={14} className="animate-spin"/> {imageMode ? "Generating your image…" : "Searching and thinking…"}</span> : null)}
               </div>
+              {message.imagePending && <div role="status" aria-label="Generating image" className="w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 p-3 dark:border-white/10">
+                <div className="aspect-square w-full animate-pulse rounded-lg bg-gradient-to-br from-indigo-500/10 via-violet-500/15 to-slate-400/10" />
+                <p className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"><Loader2 size={14} className="animate-spin"/> Creating your image with FLUX.1-dev…</p>
+              </div>}
               {message.imageData && <div className="w-full overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-zinc-950">
                 <Image src={message.imageData} alt="AI-generated image" width={1024} height={1024} unoptimized className="h-auto max-h-[560px] w-full rounded-lg object-contain" />
-                <a href={message.imageData} download="chatplus-generated-image.jpg" className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><Download size={14}/> Download image</a>
-                <p className="mt-2 text-[10px] text-slate-400">Generated with NVIDIA Cosmos3 Nano. AI-generated content may contain inaccuracies.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <a href={message.imageData} download="chatplus-generated-image.jpg" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><Download size={14}/> Download</a>
+                  <a href={message.imageData} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><ImageIcon size={14}/> Open full size</a>
+                  <button type="button" onClick={() => void generateImage(message.imagePrompt || "", false)} disabled={busy || !message.imagePrompt} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><Wand2 size={14}/> Regenerate</button>
+                </div>
+                <p className="mt-2 text-[10px] text-slate-400">Generated with NVIDIA FLUX.1-dev. AI-generated content may contain inaccuracies.</p>
               </div>}
               {message.sources?.length ? <div className="w-full rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-950">
                 <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300"><Globe2 size={13}/> Sources</p>
@@ -249,20 +283,14 @@ export default function AIChat() {
           </div>)}
           <div ref={bottomRef}/>
         </div>
-        {error && <div role="alert" className="mx-4 mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">{error}</div>}
+        {error && <div role="alert" className="mx-4 mb-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">
+          <span>{error}</span>
+          {lastImagePrompt && <button type="button" onClick={() => void generateImage(lastImagePrompt, false)} disabled={busy} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-rose-300/70 px-3 py-1.5 text-xs font-semibold hover:bg-rose-100 disabled:opacity-50 dark:border-rose-300/20 dark:hover:bg-rose-400/10"><Wand2 size={13}/> Retry image</button>}
+        </div>}
         <form onSubmit={submit} className="border-t border-slate-200 p-3 dark:border-white/10 sm:p-4">
           {imageMode && <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="flex items-center gap-2 text-xs text-fuchsia-600 dark:text-fuchsia-300"><Wand2 size={13}/> Image generation mode · NVIDIA Cosmos3 Nano</p>
-            <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">Size
-              <select value={imageResolution} onChange={event => setImageResolution(event.target.value)} disabled={busy} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-zinc-900">
-                <option value="480_1_1">480 · Square</option>
-                <option value="480_16_9">480 · Landscape</option>
-                <option value="480_9_16">480 · Portrait</option>
-                <option value="720_1_1">720 · Square</option>
-                <option value="720_16_9">720 · Landscape</option>
-                <option value="720_9_16">720 · Portrait</option>
-              </select>
-            </label>
+            <p className="flex items-center gap-2 text-xs text-fuchsia-600 dark:text-fuchsia-300"><Wand2 size={13}/> Image generation mode · NVIDIA FLUX.1-dev</p>
+            <p className="text-xs text-slate-500 dark:text-slate-300">1024 × 1024 · JPEG</p>
           </div>}
           {webSearch && !imageMode && <p className="mb-2 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-300"><Globe2 size={13}/> Live web search is on. Each message you send is shared with Tavily to find current sources.</p>}
           <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 focus-within:border-indigo-400 dark:border-white/10 dark:bg-zinc-950">
