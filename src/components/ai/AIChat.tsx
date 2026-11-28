@@ -1,11 +1,13 @@
 "use client"
 
-import { FormEvent, useEffect, useRef, useState } from "react"
+import { ClipboardEvent, FormEvent, useEffect, useRef, useState } from "react"
 import Image from "next/image"
-import { Bot, ChevronDown, Code2, Download, FileText, Globe2, Image as ImageIcon, Loader2, Send, Sparkles, Trash2, User, Wand2 } from "lucide-react"
+import { Bot, CheckCircle2, ChevronDown, Code2, Download, FileText, Globe2, Image as ImageIcon, Loader2, Paperclip, Send, Sparkles, Trash2, User, Wand2, X } from "lucide-react"
+import { AIAttachment, AI_ATTACHMENT_MAX_FILES, AI_ATTACHMENT_MAX_FILE_SIZE, AI_ATTACHMENT_MAX_TOTAL_SIZE, classifyAIAttachment, sanitizeAIFilename, uploadAIAttachment } from "@/lib/ai/attachments"
 
 type SearchSource = { title: string; url: string; snippet: string; publishedDate?: string }
-type ChatMessage = { role: "user" | "assistant"; content: string; sources?: SearchSource[]; imageData?: string; imagePending?: boolean; imagePrompt?: string }
+type ChatMessage = { role: "user" | "assistant"; content: string; sources?: SearchSource[]; imageData?: string; imagePending?: boolean; imagePrompt?: string; attachments?: AIAttachment[] }
+type PendingAttachment = AIAttachment & { status: "uploading" | "uploaded" | "error"; progress: number; previewUrl?: string; sourceFile?: File; error?: string }
 type Model = "lightning" | "super"
 type AssistantMode = "general" | "coding"
 
@@ -20,14 +22,27 @@ export default function AIChat() {
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState("")
   const [lastImagePrompt, setLastImagePrompt] = useState("")
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([])
+  const [dragActive, setDragActive] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let active = true
-    fetch("/api/ai/images", { cache: "no-store" })
-      .then(async response => response.ok ? response.json() : null)
-      .then(payload => {
+    const restore = async () => {
+      try {
+        const response = await fetch("/api/ai/conversations", { cache: "no-store" })
+        if (response.ok) {
+          const payload = await response.json()
+          if (active && Array.isArray(payload?.messages) && payload.messages.length) {
+            setMessages(payload.messages)
+            return
+          }
+        }
+        const imageResponse = await fetch("/api/ai/images", { cache: "no-store" })
+        if (!imageResponse.ok) return
+        const payload = await imageResponse.json()
         if (!active || !Array.isArray(payload?.images)) return
         const restored: ChatMessage[] = payload.images.slice().reverse().flatMap((item: { prompt?: string; imageUrl?: string }) => {
           if (typeof item.prompt !== "string" || typeof item.imageUrl !== "string") return []
@@ -36,23 +51,153 @@ export default function AIChat() {
             { role: "assistant" as const, content: "", imageData: item.imageUrl, imagePrompt: item.prompt },
           ]
         })
-        if (restored.length) setMessages(current => current.length ? current : restored)
-      })
-      .catch(() => {
-        // Image history is best-effort; it must not block a new chat.
-      })
+        if (restored.length) setMessages(restored)
+      } catch {
+        // Conversation restore is best-effort and never blocks a new chat.
+      }
+    }
+    void restore()
     return () => { active = false }
   }, [])
+
+  async function persistConversation(nextMessages: ChatMessage[]) {
+    try {
+      const response = await fetch("/api/ai/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: nextMessages.slice(-60).map(message => ({
+          role: message.role,
+          content: message.content,
+          ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+          ...(message.sources?.length ? { sources: message.sources } : {}),
+          ...(message.imageData ? { imageData: message.imageData } : {}),
+          ...(message.imagePrompt ? { imagePrompt: message.imagePrompt } : {}),
+        })) }),
+      })
+      if (!response.ok) throw new Error("Conversation history save failed")
+    } catch {
+      setError("Your response is ready, but conversation history could not be saved.")
+    }
+  }
+
+  async function addFiles(fileList: FileList | File[]) {
+    setError("")
+    const selected = Array.from(fileList)
+    if (!selected.length) return
+    const remainingSlots = AI_ATTACHMENT_MAX_FILES - attachments.length
+    if (remainingSlots <= 0) {
+      setError("You can attach up to 5 files per message.")
+      return
+    }
+    const existingBytes = attachments.reduce((total, item) => total + item.fileSize, 0)
+    let acceptedBytes = existingBytes
+    const pending = selected.slice(0, remainingSlots).flatMap(file => {
+      if (!file.size || file.size > AI_ATTACHMENT_MAX_FILE_SIZE || acceptedBytes + file.size > AI_ATTACHMENT_MAX_TOTAL_SIZE) {
+        setError("Each file must be 15 MiB or smaller and the combined message limit is 30 MiB.")
+        return []
+      }
+      acceptedBytes += file.size
+      const fileName = sanitizeAIFilename(file.name)
+      const mimeType = (file.type || "").split(";")[0].trim().toLowerCase()
+      const kind = classifyAIAttachment(mimeType, fileName)
+      return [{
+        id: crypto.randomUUID(),
+        url: "",
+        fileName,
+        fileSize: file.size,
+        mimeType: mimeType || "application/octet-stream",
+        kind,
+        status: "uploading" as const,
+        progress: 0,
+        ...(kind === "image" ? { previewUrl: URL.createObjectURL(file) } : {}),
+        sourceFile: file,
+      }]
+    })
+    if (selected.length > remainingSlots) setError("Only the first 5 attachments can be added to one message.")
+    if (!pending.length) return
+    setAttachments(current => [...current, ...pending])
+
+    for (const item of pending) {
+      try {
+        const uploaded = await uploadAIAttachment(item.sourceFile as File, percentage => {
+          setAttachments(current => current.map(candidate => candidate.id === item.id ? { ...candidate, progress: percentage } : candidate))
+        })
+        setAttachments(current => current.map(candidate => candidate.id === item.id
+          ? { ...uploaded, id: item.id, status: "uploaded", progress: 100, previewUrl: candidate.previewUrl }
+          : candidate))
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "Upload failed. Please retry."
+        setAttachments(current => current.map(candidate => candidate.id === item.id
+          ? { ...candidate, status: "error", error: message }
+          : candidate))
+        setError(message)
+      }
+    }
+  }
+
+  async function retryAttachment(id: string) {
+    const item = attachments.find(candidate => candidate.id === id)
+    if (!item?.sourceFile) return
+    setAttachments(current => current.map(candidate => candidate.id === id ? { ...candidate, status: "uploading", progress: 0, error: undefined } : candidate))
+    try {
+      const uploaded = await uploadAIAttachment(item.sourceFile, percentage => {
+        setAttachments(current => current.map(candidate => candidate.id === id ? { ...candidate, progress: percentage } : candidate))
+      })
+      setAttachments(current => current.map(candidate => candidate.id === id
+        ? { ...uploaded, id, status: "uploaded", progress: 100, previewUrl: candidate.previewUrl }
+        : candidate))
+      setError("")
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Upload failed. Please retry."
+      setAttachments(current => current.map(candidate => candidate.id === id ? { ...candidate, status: "error", error: message } : candidate))
+      setError(message)
+    }
+  }
+
+  function removeAttachment(id: string) {
+    const item = attachments.find(candidate => candidate.id === id)
+    if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl)
+    setAttachments(current => current.filter(candidate => candidate.id !== id))
+  }
+
+  function clearAttachments() {
+    attachments.forEach(item => { if (item.previewUrl) URL.revokeObjectURL(item.previewUrl) })
+    setAttachments([])
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(event.clipboardData.items)
+      .filter(item => item.kind === "file" && item.type.startsWith("image/"))
+      .map(item => item.getAsFile())
+      .filter((file): file is File => Boolean(file))
+    if (files.length) {
+      event.preventDefault()
+      void addFiles(files)
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     const prompt = input.trim()
-    if (!prompt || busy) return
+    const uploadedAttachments: AIAttachment[] = attachments
+      .filter(item => item.status === "uploaded")
+      .map(({ id, url, fileName, fileSize, mimeType, kind }) => ({ id, url, fileName, fileSize, mimeType, kind }))
+    if (busy || attachments.some(item => item.status !== "uploaded")) return
+    if (!prompt && !uploadedAttachments.length) return
     if (imageMode) {
+      if (uploadedAttachments.length) {
+        setError("Remove file attachments before switching to image generation.")
+        return
+      }
       await generateImage(prompt)
       return
     }
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: prompt }]
+
+    const nextMessages: ChatMessage[] = [...messages, {
+      role: "user",
+      content: prompt,
+      ...(uploadedAttachments.length ? { attachments: uploadedAttachments } : {}),
+    }]
     setMessages([...nextMessages, { role: "assistant", content: "" }])
     setInput("")
     setError("")
@@ -64,7 +209,16 @@ export default function AIChat() {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, mode, webSearch, messages: nextMessages.slice(-20).map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({
+          model,
+          mode,
+          webSearch,
+          messages: nextMessages.slice(-20).map(({ role, content, attachments: messageAttachments }) => ({
+            role,
+            content,
+            ...(messageAttachments?.length ? { attachments: messageAttachments } : {}),
+          })),
+        }),
         signal: controller.signal,
       })
       if (!response.ok) {
@@ -107,9 +261,15 @@ export default function AIChat() {
       buffer += decoder.decode()
       if (buffer.trim()) processEvent(buffer)
       if (!answer.trim()) throw new Error("The model returned an empty response. Please try again.")
+
+      const finalMessages: ChatMessage[] = [...nextMessages, { role: "assistant", content: answer, sources }]
+      setMessages(finalMessages)
+      await persistConversation(finalMessages)
+      clearAttachments()
     } catch (cause) {
       if (!controller.signal.aborted) {
-        setMessages(nextMessages)
+        setMessages(messages)
+        setInput(prompt)
         setError(cause instanceof Error ? cause.message : "Something went wrong")
       }
     } finally {
@@ -142,7 +302,9 @@ export default function AIChat() {
       if (typeof payload.image !== "string" || !/^https:\/\//.test(payload.image)) {
         throw new Error("The image provider returned an invalid image URL")
       }
-      setMessages([...nextMessages, { role: "assistant", content: "", imageData: payload.image, imagePrompt: prompt }])
+      const finalMessages: ChatMessage[] = [...nextMessages, { role: "assistant", content: "", imageData: payload.image, imagePrompt: prompt }]
+      setMessages(finalMessages)
+      await persistConversation(finalMessages)
       setLastImagePrompt("")
     } catch (cause) {
       setMessages(nextMessages)
@@ -199,8 +361,12 @@ export default function AIChat() {
   function clearChat() {
     abortRef.current?.abort()
     setMessages([])
+    clearAttachments()
     setError("")
+    setLastImagePrompt("")
     setBusy(false)
+    void fetch("/api/ai/conversations", { method: "DELETE" })
+    void fetch("/api/ai/images", { method: "DELETE" })
   }
 
   return (
@@ -239,7 +405,13 @@ export default function AIChat() {
           <button type="button" onClick={clearChat} disabled={!messages.length && !busy} title="New chat" className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"><Trash2 size={16}/></button>
         </div>
       </header>
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+      <section
+        onDragOver={event => { event.preventDefault(); setDragActive(true) }}
+        onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragActive(false) }}
+        onDrop={event => { event.preventDefault(); setDragActive(false); void addFiles(event.dataTransfer.files) }}
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900"
+      >
+        {dragActive && <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-indigo-400 bg-indigo-500/10 text-sm font-semibold text-indigo-600 backdrop-blur-sm dark:text-indigo-300">Drop files to attach</div>}
         <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
           {!messages.length && <div className="mx-auto flex min-h-full max-w-xl flex-col items-center justify-center text-center">
             <div className="mb-4 rounded-full bg-indigo-50 p-4 text-indigo-600 dark:bg-indigo-400/10 dark:text-indigo-300">{imageMode ? <ImageIcon size={30}/> : mode === "coding" ? <Code2 size={30}/> : <Bot size={30}/>}</div>
@@ -255,6 +427,17 @@ export default function AIChat() {
               <div className={"max-w-full whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 " + (message.role === "user" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-slate-100")}>
                 {message.content || (busy && index === messages.length - 1 ? <span className="inline-flex items-center gap-2 text-slate-500"><Loader2 size={14} className="animate-spin"/> {imageMode ? "Generating your image…" : "Searching and thinking…"}</span> : null)}
               </div>
+              {message.attachments?.length ? <div className="flex w-full flex-wrap gap-2">
+                {message.attachments.map(attachment => attachment.kind === "image"
+                  ? <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl border border-white/20">
+                      <Image src={attachment.url} alt={attachment.fileName} width={180} height={140} unoptimized className="h-28 w-36 object-cover" />
+                    </a>
+                  : <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="flex max-w-[240px] items-center gap-2 rounded-xl border border-white/20 bg-black/5 px-3 py-2 text-xs hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10">
+                      <FileText size={17} className="shrink-0"/>
+                      <span className="min-w-0 truncate">{attachment.fileName}</span>
+                      <span className="shrink-0 opacity-70">{(attachment.fileSize / 1024).toFixed(0)} KB</span>
+                    </a>)}
+              </div> : null}
               {message.imagePending && <div role="status" aria-label="Generating image" className="w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 p-3 dark:border-white/10">
                 <div className="aspect-square w-full animate-pulse rounded-lg bg-gradient-to-br from-indigo-500/10 via-violet-500/15 to-slate-400/10" />
                 <p className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"><Loader2 size={14} className="animate-spin"/> Creating your image with FLUX.1-dev…</p>
@@ -293,10 +476,29 @@ export default function AIChat() {
             <p className="text-xs text-slate-500 dark:text-slate-300">1024 × 1024 · JPEG</p>
           </div>}
           {webSearch && !imageMode && <p className="mb-2 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-300"><Globe2 size={13}/> Live web search is on. Each message you send is shared with Tavily to find current sources.</p>}
+          {attachments.length > 0 && <div className="mb-3 grid gap-2 sm:grid-cols-2">
+            {attachments.map(attachment => <div key={attachment.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5 dark:border-white/10 dark:bg-zinc-900">
+              {attachment.previewUrl
+                ? <Image src={attachment.previewUrl} alt="" width={44} height={44} unoptimized className="h-11 w-11 shrink-0 rounded-lg object-cover"/>
+                : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500"><FileText size={20}/></div>}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{attachment.fileName}</p>
+                <p className="text-[10px] text-slate-400">{(attachment.fileSize / 1024).toFixed(1)} KB · {attachment.status === "uploading" ? "Uploading " + attachment.progress + "%" : attachment.status === "error" ? "Upload failed" : "Ready to send"}</p>
+                {attachment.status === "uploading" && <div className="mt-1 h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"><div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: attachment.progress + "%" }}/></div>}
+                {attachment.error && <p className="mt-1 truncate text-[10px] text-rose-500">{attachment.error}</p>}
+              </div>
+              {attachment.status === "uploaded" && <CheckCircle2 size={16} className="shrink-0 text-emerald-500"/>}
+              {attachment.status === "error" && <button type="button" onClick={() => void retryAttachment(attachment.id)} className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-semibold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-white/5">Retry</button>}
+              <button type="button" onClick={() => removeAttachment(attachment.id)} aria-label={"Remove " + attachment.fileName} className="shrink-0 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"><X size={15}/></button>
+            </div>)}
+          </div>}
+          {attachments.some(attachment => attachment.kind === "image" && attachment.status === "uploaded") && <p className="mb-2 text-[11px] text-indigo-600 dark:text-indigo-300">Image attachments are automatically analyzed with Nemotron 3.5 Super VL.</p>}
+          <input ref={fileInputRef} type="file" multiple className="hidden" aria-label="Choose AI attachments" onChange={event => { if (event.target.files) void addFiles(event.target.files); event.target.value = "" }}/>
           <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 focus-within:border-indigo-400 dark:border-white/10 dark:bg-zinc-950">
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={busy || imageMode} aria-label="Attach files" title="Attach files or paste an image" className="rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-200 hover:text-indigo-600 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-white/10"><Paperclip size={18}/></button>
             <label className="sr-only" htmlFor="ai-prompt">Message ChatPlus AI</label>
-            <textarea id="ai-prompt" value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(event as unknown as FormEvent) } }} rows={1} maxLength={imageMode ? 4000 : 12000} placeholder={imageMode ? "Describe the image you want to generate…" : "Message ChatPlus AI…"} className="max-h-40 min-h-10 flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" />
-            <button type="submit" disabled={busy || !input.trim()} aria-label="Send message" className="rounded-xl bg-indigo-600 p-3 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"><Send size={17}/></button>
+            <textarea id="ai-prompt" value={input} onChange={event => setInput(event.target.value)} onPaste={handlePaste} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(event as unknown as FormEvent) } }} rows={1} maxLength={imageMode ? 4000 : 12000} placeholder={imageMode ? "Describe the image you want to generate…" : attachments.length ? "Ask a question about your attachments…" : "Message ChatPlus AI…"} className="max-h-40 min-h-10 flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" />
+            <button type="submit" disabled={busy || attachments.some(attachment => attachment.status !== "uploaded") || (!input.trim() && !attachments.length)} aria-label="Send message" className="rounded-xl bg-indigo-600 p-3 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"><Send size={17}/></button>
           </div>
           <p className="mt-2 text-center text-[11px] text-slate-400">AI can make mistakes. Avoid sharing passwords, private keys, or sensitive personal information.</p>
         </form>

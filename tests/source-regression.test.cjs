@@ -16,7 +16,7 @@ function walk(directory) {
 test("the API route inventory is complete and every route exports an HTTP handler", () => {
   const apiRoot = path.join(root, "src/app/api");
   const routes = walk(apiRoot).filter(file => /route\.(ts|js)$/.test(file));
-  assert.equal(routes.length, 42, "update this inventory assertion when adding or removing API routes");
+  assert.equal(routes.length, 44, "update this inventory assertion when adding or removing API routes");
 
   for (const file of routes) {
     const source = fs.readFileSync(file, "utf8");
@@ -363,6 +363,8 @@ test("AI image generation uses NVIDIA FLUX, persists results, and exposes retry 
   assert.match(route, /model:\s*"black-forest-labs\/flux\.1-dev"/);
   assert.match(route, /result\.artifacts\?\.\[0\]/);
   assert.match(route, /artifact\?\.base64/);
+  assert.match(route, /finishReason === "CONTENT_FILTERED"/);
+  assert.match(route, /finishReason === "ERROR"/);
   assert.match(route, /AbortSignal\.timeout/);
   assert.match(route, /MAX_IMAGE_BYTES/);
   assert.match(route, /await put\(/);
@@ -372,9 +374,55 @@ test("AI image generation uses NVIDIA FLUX, persists results, and exposes retry 
   assert.match(ui, /Retry image/);
   assert.match(ui, /Open full size/);
   assert.match(ui, /Regenerate/);
-  assert.match(ui, /download="chatplus-generated-image\.jpg"/);
+  assert.match(ui, /anchor\.download\s*=\s*["']chatplus-generated-image\.jpg["']/);
   assert.match(ui, /imagePending/);
 });
+
+test("AI attachments use direct Blob uploads, ownership checks, and bounded document extraction", () => {
+  const upload = read("src/app/api/ai/attachments/upload/route.ts");
+  const helper = read("src/lib/ai/attachments.ts");
+  const processor = read("src/lib/ai/attachment-processing.ts");
+  const chat = read("src/app/api/ai/chat/route.ts");
+  const conversation = read("src/app/api/ai/conversations/route.ts");
+  const ui = read("src/components/ai/AIChat.tsx");
+  const packageJson = JSON.parse(read("package.json"));
+
+  assert.equal(packageJson.dependencies["xlsx"], "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz");
+  assert.match(upload, /handleUpload/);
+  assert.match(upload, /onBeforeGenerateToken/);
+  assert.match(upload, /onUploadCompleted/);
+  assert.match(upload, /ai:attachment-owner:/);
+  assert.match(upload, /maximumSizeInBytes: MAX_FILE_SIZE/);
+  assert.match(upload, /BLOCKED_EXTENSIONS/);
+  assert.match(helper, /from "@vercel\/blob\/client"/);
+  assert.match(helper, /onUploadProgress/);
+  assert.match(helper, /AI_ATTACHMENT_MAX_FILES = 5/);
+  assert.match(helper, /AI_ATTACHMENT_MAX_TOTAL_SIZE = 30/);
+  assert.match(processor, /extractText\(bytes/);
+  assert.match(processor, /inflateRawSync/);
+  assert.match(processor, /parseXlsx/);
+  assert.match(processor, /summarizeLegacyXls/);
+  assert.match(processor, /XLSX\.read/);
+  assert.match(processor, /actualSize/);
+  assert.match(chat, /processed\.actualSize/);
+  assert.match(processor, /parseCsv/);
+  assert.match(processor, /ai:attachment-owner:/);
+  assert.match(processor, /12_000/);
+  assert.match(chat, /processAIAttachment/);
+  assert.match(chat, /type: "image_url"/);
+  assert.match(chat, /MODELS\.super/);
+  assert.match(chat, /24_000/);
+  assert.match(conversation, /export async function GET/);
+  assert.match(conversation, /export async function POST/);
+  assert.match(conversation, /export async function DELETE/);
+  assert.match(conversation, /ai:conversation:/);
+  assert.match(ui, /uploadAIAttachment/);
+  assert.match(ui, /onDrop=/);
+  assert.match(ui, /onPaste={handlePaste}/);
+  assert.match(ui, /Uploading /);
+  assert.match(ui, /message\.attachments/);
+});
+
 
 test("AI PDF export is authenticated, bounded, quota-limited, and returns a private PDF attachment", () => {
   const route = read("src/app/api/ai/pdf/route.ts");
