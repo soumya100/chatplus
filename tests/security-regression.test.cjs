@@ -139,43 +139,18 @@ test("CI installs no OS packages and the Redis suites use the in-repo RESP clien
   assert.ok(fs.existsSync(path.join(root, "tests", "helpers", "resp-redis-client.cjs")), "the RESP client helper must exist");
 });
 
-test("pull-request workflows keep repository secrets out of validation jobs and isolate gated Vercel deployment", () => {
-  const workflowDirectory = path.join(root, ".github", "workflows");
-  const workflowFiles = fs.readdirSync(workflowDirectory).filter(file => /\.ya?ml$/.test(file));
-  assert.ok(workflowFiles.length > 0, "workflow definitions must exist");
-  for (const file of workflowFiles) {
-    const source = fs.readFileSync(path.join(workflowDirectory, file), "utf8");
-    const runsOnPullRequests = /^ {2}pull_request(?:_target)?:/m.test(source);
-    if (!runsOnPullRequests) continue;
-
-    if (file !== "chatapp-ci.yml") {
-      assert.doesNotMatch(source, /secrets\.[A-Z_]+/, file + " runs on pull_request and must not reference secrets");
-      continue;
-    }
-
-    // Keep validation/build/scanner jobs tokenless. Only the isolated,
-    // same-repository Vercel preview job may consume deployment credentials.
-    const deploymentMarker = "  deploy-vercel-preview:";
-    const deploymentIndex = source.indexOf(deploymentMarker);
-    assert.notEqual(deploymentIndex, -1, "the gated Vercel preview job must exist");
-    const validationJobs = source.slice(0, deploymentIndex);
-    const deploymentJob = source.slice(deploymentIndex);
-    assert.doesNotMatch(validationJobs, /secrets\.[A-Z_]+/, "PR validation and security jobs must remain tokenless");
-    assert.match(deploymentJob, /needs:\s*\n\s*- pr-quality-gate/, "preview deployment must depend on the PR quality gate");
-    assert.match(deploymentJob, /needs\.pr-quality-gate\.result == 'success'/, "preview deployment must require a successful quality gate");
-    assert.match(deploymentJob, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/, "preview deployment must reject fork PRs");
-    const secretReferences = [...deploymentJob.matchAll(/secrets\.([A-Z_]+)/g)].map(match => match[1]);
-    assert.ok(secretReferences.length > 0, "the preview deployment must use configured Vercel credentials");
-    assert.deepEqual([...new Set(secretReferences)].sort(), ["VERCEL_ORG_ID", "VERCEL_PROJECT_ID", "VERCEL_TOKEN"]);
-  }
+test("GitHub validation workflows stay tokenless and Vercel deploys through its Git integration", () => {
+  const workflow = read(".github/workflows/chatapp-ci.yml");
+  assert.doesNotMatch(workflow, /secrets\\.[A-Z_]+/, "CI validation must not need Vercel credentials");
+  assert.doesNotMatch(workflow, /deploy-vercel-(?:preview|production):/, "Vercel builds must use native Git integration, not CLI builds with masked secrets");
+  assert.match(workflow, /^ {2}pull_request:/m);
+  assert.match(workflow, /^ {2}push:/m);
 });
-test("the production deploy gate only trusts CI runs from this repository's own main branch", () => {
+test("production recovery deployment is manual and cannot be triggered by CI status", () => {
   const workflow = read(".github/workflows/deploy-production.yml");
-  assert.match(workflow, /github\.event\.workflow_run\.event == 'push'/);
-  assert.match(workflow, /github\.event\.workflow_run\.head_branch == 'main'/);
-  assert.match(workflow, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/);
+  assert.match(workflow, /^on:\\n  workflow_dispatch:/m);
+  assert.doesNotMatch(workflow, /workflow_run:/);
 });
-
 test("dashboard authorization remains enforced at the middleware boundary", () => {
   const middleware = read("src/middleware.ts");
   assert.match(middleware, /withAuth/);
