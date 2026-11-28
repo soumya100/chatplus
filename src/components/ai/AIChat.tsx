@@ -227,11 +227,25 @@ export default function AIChat() {
           model,
           mode,
           webSearch,
-          messages: nextMessages.slice(-20).map(({ role, content, attachments: messageAttachments }) => ({
-            role,
-            content,
-            ...(messageAttachments?.length ? { attachments: messageAttachments } : {}),
-          })),
+          messages: nextMessages.slice(-20).flatMap(message => {
+            // Image-generation turns intentionally store the image URL separately
+            // and have empty text. Send a text placeholder so the chat API's
+            // non-empty-message validation does not reject later turns.
+            const content = message.content
+              || (message.imageData ? "[A previously generated image is part of this conversation.]" : "")
+            // Older assistant replies can exceed the API's per-message limit.
+            // Bound historical context before sending so one large reply cannot
+            // randomly invalidate an otherwise unrelated new prompt or PDF.
+            const boundedContent = content.length > 12_000
+              ? content.slice(0, 11_950) + "\n[Earlier content truncated for context.]"
+              : content
+            if (!boundedContent.trim() && !message.attachments?.length) return []
+            return [{
+              role: message.role,
+              content: boundedContent,
+              ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+            }]
+          }),
         }),
         signal: controller.signal,
       })

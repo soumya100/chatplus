@@ -395,6 +395,19 @@ test("AI image generation uses NVIDIA FLUX, persists results, and exposes retry 
   assert.match(ui, /imagePending/);
 });
 
+
+test("AI chat request normalization preserves image turns and bounds oversized history", () => {
+  const ui = read("src/components/ai/AIChat.tsx");
+  const route = read("src/app/api/ai/chat/route.ts");
+  assert.match(ui, /message\.imageData\s*\?\s*"\[A previously generated image is part of this conversation\.\]"/);
+  assert.match(ui, /content\.length\s*>\s*12_000/);
+  assert.match(ui, /content\.slice\(0,\s*11_950\)/);
+  assert.match(ui, /if\s*\(!boundedContent\.trim\(\)\s*&&\s*!message\.attachments\?\.length\)\s*return\s*\[\]/);
+  assert.match(route, /requestSchema\.safeParse\(rawBody\)/);
+  assert.match(route, /Request validation failed/);
+  assert.match(route, /parsedBody\.error\.issues\.map/);
+});
+
 test("AI attachments use direct Blob uploads, ownership checks, and bounded document extraction", () => {
   const upload = read("src/app/api/ai/attachments/upload/route.ts");
   const helper = read("src/lib/ai/attachments.ts");
