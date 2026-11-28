@@ -62,7 +62,7 @@ async function summarizeIncremental(
   const compactMessages = messages.map(message => {
     const content = message.content.length <= 4_000
       ? message.content
-      : message.content.slice(0, 2_500) + "\\n[Middle omitted]\\n" + message.content.slice(-1_400)
+      : message.content.slice(0, 2_500) + "\n[Middle omitted]\n" + message.content.slice(-1_400)
     const boundedContent = content.slice(0, remainingChars)
     remainingChars = Math.max(0, remainingChars - boundedContent.length)
     return {
