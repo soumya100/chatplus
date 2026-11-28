@@ -198,6 +198,9 @@ async function exerciseBrowser(name, browserType) {
     // page and every other network error remain visible to the assertion.
     const requestUrlObject = new URL(requestUrl);
     const isRscRequest = requestUrlObject.searchParams.has("_rsc");
+    // Firefox can abort its browser-managed favicon request while the test navigates between pages.
+    // This is not an application resource failure; only known GET cancellation errors are ignored.
+    const isFaviconRequest = /\/(?:icon\.svg|favicon\.ico)$/.test(requestUrlObject.pathname);
     const isNextStaticAsset = requestUrlObject.pathname.startsWith("/_next/static/");
     const knownBrowserAbort = [
       "net::ERR_ABORTED",
@@ -207,7 +210,7 @@ async function exerciseBrowser(name, browserType) {
     const expectedNavigationAbort =
       request.method() === "GET" &&
       knownBrowserAbort &&
-      (isRscRequest || (isNextStaticAsset && supersededByNavigation));
+      (isRscRequest || isFaviconRequest || (isNextStaticAsset && supersededByNavigation));
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
