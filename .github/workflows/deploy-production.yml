@@ -54,26 +54,18 @@ jobs:
         if: steps.config.outputs.configured == 'true'
         # Pinned CLI version: an unpinned install would run whatever was published
         # to npm at deploy time with production credentials in reach.
-        run: npm install --global vercel@66.1.0
+        run: npm install --global vercel@68.0.0
 
       - name: Link the Vercel project
         if: steps.config.outputs.configured == 'true'
         run: vercel link --yes --project "$VERCEL_PROJECT_ID" --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN"
 
-      - name: Pull production environment
-        if: steps.config.outputs.configured == 'true'
-        run: vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
-
-      - name: Build production artifact
-        if: steps.config.outputs.configured == 'true'
-        run: vercel build --prod --token "$VERCEL_TOKEN"
-
-      - name: Deploy production artifact
+      - name: Deploy production with Vercel remote build
         if: steps.config.outputs.configured == 'true'
         id: deploy
         shell: bash
         run: |
-          vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN" | tee /tmp/vercel-deploy.log
+          vercel deploy --yes --prod --token "$VERCEL_TOKEN" | tee /tmp/vercel-deploy.log
           deployment_url="$(grep -Eo 'https://[^[:space:]]+\.vercel\.app' /tmp/vercel-deploy.log | head -n 1)"
           if [ -z "$deployment_url" ]; then
             echo "Could not extract the Vercel deployment URL from CLI output."
