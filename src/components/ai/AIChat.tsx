@@ -17,6 +17,8 @@ type AssistantMode = "general" | "coding"
 
 export default function AIChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [conversationSummary, setConversationSummary] = useState("")
+  const [summaryThrough, setSummaryThrough] = useState(0)
   const [input, setInput] = useState("")
   const [model, setModel] = useState<Model>("super")
   const [mode, setMode] = useState<AssistantMode>("coding")
@@ -45,6 +47,8 @@ export default function AIChat() {
           const payload = await response.json()
           if (active && Array.isArray(payload?.messages) && payload.messages.length) {
             setMessages(payload.messages)
+            setConversationSummary(typeof payload.summary === "string" ? payload.summary : "")
+            setSummaryThrough(typeof payload.summaryThrough === "number" ? payload.summaryThrough : 0)
             return
           }
         }
@@ -86,17 +90,24 @@ export default function AIChat() {
       const response = await fetch("/api/ai/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages.slice(-60).map(message => ({
-          role: message.role,
-          content: message.content,
-          ...(message.createdAt ? { createdAt: message.createdAt } : {}),
-          ...(message.attachments?.length ? { attachments: message.attachments } : {}),
-          ...(message.sources?.length ? { sources: message.sources } : {}),
-          ...(message.imageData ? { imageData: message.imageData } : {}),
-          ...(message.imagePrompt ? { imagePrompt: message.imagePrompt } : {}),
-        })) }),
+        body: JSON.stringify({
+          summary: conversationSummary,
+          summaryThrough,
+          messages: nextMessages.slice(-500).map(message => ({
+            role: message.role,
+            content: message.content,
+            ...(message.createdAt ? { createdAt: message.createdAt } : {}),
+            ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+            ...(message.sources?.length ? { sources: message.sources } : {}),
+            ...(message.imageData ? { imageData: message.imageData } : {}),
+            ...(message.imagePrompt ? { imagePrompt: message.imagePrompt } : {}),
+          })),
+        }),
       })
       if (!response.ok) throw new Error("Conversation history save failed")
+      const saved = await response.json()
+      if (typeof saved.summary === "string") setConversationSummary(saved.summary)
+      if (typeof saved.summaryThrough === "number") setSummaryThrough(saved.summaryThrough)
     } catch {
       setError("Your response is ready, but conversation history could not be saved.")
     }
@@ -227,7 +238,12 @@ export default function AIChat() {
           model,
           mode,
           webSearch,
-          messages: nextMessages.slice(-20).flatMap(message => {
+          summary: conversationSummary,
+          messages: (() => {
+            // Keep the latest turns verbatim while enforcing a shared character
+            // budget. The server adds the persistent summary as historical context.
+            let remainingChars = 36_000
+            return nextMessages.slice(-20).reverse().flatMap(message => {
             // Image-generation turns intentionally store the image URL separately
             // and have empty text. Send a text placeholder so the chat API's
             // non-empty-message validation does not reject later turns.
@@ -236,16 +252,20 @@ export default function AIChat() {
             // Older assistant replies can exceed the API's per-message limit.
             // Bound historical context before sending so one large reply cannot
             // randomly invalidate an otherwise unrelated new prompt or PDF.
-            const boundedContent = content.length > 12_000
-              ? content.slice(0, 11_950) + "\n[Earlier content truncated for context.]"
+            if (!content.trim() && !message.attachments?.length) return []
+            const available = Math.max(0, remainingChars)
+            if (!available && !message.attachments?.length) return []
+            const boundedContent = content.length > Math.min(12_000, available)
+              ? content.slice(0, Math.min(12_000, available))
               : content
-            if (!boundedContent.trim() && !message.attachments?.length) return []
+            remainingChars -= boundedContent.length
             return [{
               role: message.role,
               content: boundedContent,
               ...(message.attachments?.length ? { attachments: message.attachments } : {}),
             }]
-          }),
+          }).reverse()
+          })(),
         }),
         signal: controller.signal,
       })
