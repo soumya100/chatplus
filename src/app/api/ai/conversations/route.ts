@@ -18,6 +18,7 @@ const attachmentSchema = z.object({
 const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string().max(12_000),
+  createdAt: z.string().max(40).optional(),
   attachments: z.array(attachmentSchema).max(5).optional(),
   sources: z.array(z.object({
     title: z.string().max(240),

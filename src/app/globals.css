@@ -184,3 +184,53 @@ html.dark .react-loading-skeleton {
 .scrollbar-thumb-rounded::-webkit-scrollbar-thumb {
   border-radius: 0.25rem;
 }
+
+/* AI workspace motion and scroll affordances */
+@keyframes ai-message-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ai-message-enter {
+  animation: ai-message-enter 180ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.ai-hero-glow {
+  position: relative;
+  isolation: isolate;
+}
+
+.ai-hero-glow::before {
+  content: "";
+  position: absolute;
+  inset: -3rem;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 45%, rgb(var(--app-accent) / 0.18), transparent 65%);
+  filter: blur(18px);
+}
+
+.ai-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--app-accent) / 0.35) transparent;
+}
+
+.ai-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.ai-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgb(var(--app-accent) / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-message-enter {
+    animation: none;
+  }
+}

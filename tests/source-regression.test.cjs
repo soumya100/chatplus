@@ -424,6 +424,46 @@ test("AI attachments use direct Blob uploads, ownership checks, and bounded docu
 });
 
 
+test("AI assistant workspace uses accessible premium controls and safe markdown rendering", () => {
+  const ui = read("src/components/ai/AIChat.tsx");
+  const markdown = read("src/components/ai/MarkdownMessage.tsx");
+  const styles = read("src/app/globals.css");
+  const nextConfig = read("next.config.mjs");
+
+  assert.match(ui, /Popover\.Panel/);
+  assert.match(ui, /Menu\.Items/);
+  assert.match(ui, /Choose a model/);
+  assert.match(ui, /Export PDF/);
+  assert.match(ui, /Clear chat/);
+  assert.match(ui, /max-w-3xl/);
+  assert.match(ui, /role="log"/);
+  assert.match(ui, /aria-relevant="additions text"/);
+  assert.match(ui, /aria-pressed=\{model === "super"\}/);
+  assert.match(ui, /aria-label="Copy message"/);
+  assert.match(ui, /MarkdownMessage/);
+  assert.match(ui, /Stop generating/);
+  assert.match(ui, /scrollToBottom/);
+  assert.match(ui, /Debug my code/);
+  assert.match(ui, /Summarize a PDF/);
+  assert.match(ui, /Analyze a CSV/);
+  assert.match(ui, /TextareaAutosize/);
+  assert.match(ui, /Web search/);
+  assert.match(ui, /Create image/);
+  assert.match(ui, /ThumbsUp/);
+  assert.match(ui, /ThumbsDown/);
+  assert.match(ui, /Regenerate response/);
+  assert.match(ui, /Edit message/);
+  assert.match(markdown, /CodeBlock/);
+  assert.match(markdown, /Copy code/);
+  assert.match(markdown, /<table/);
+  assert.match(markdown, /new URL/);
+  assert.match(markdown, /url\.protocol/);
+  assert.match(styles, /ai-message-enter/);
+  assert.match(styles, /ai-scrollbar/);
+  assert.match(nextConfig, /public\.blob\.vercel-storage\.com/);
+});
+
+
 test("AI PDF export is authenticated, bounded, quota-limited, and returns a private PDF attachment", () => {
   const route = read("src/app/api/ai/pdf/route.ts");
   const ui = read("src/components/ai/AIChat.tsx");
