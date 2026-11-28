@@ -14,9 +14,9 @@ const requestSchema = z.object({
   prompt: z.string().trim().min(1).max(4000),
 }).strict()
 
-const IMAGE_ENDPOINT = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell"
+const IMAGE_ENDPOINT = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.2-klein-4b"
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
-const PROVIDER_TIMEOUT_MS = 50_000
+const PROVIDER_TIMEOUT_MS = 55_000
 const HISTORY_LIMIT = 20
 const HISTORY_TTL_SECONDS = 60 * 60 * 24 * 365
 
@@ -25,7 +25,7 @@ type GeneratedImageRecord = {
   prompt: string
   imageUrl: string
   mimeType: "image/jpeg"
-  model: "black-forest-labs/flux.1-schnell"
+  model: "black-forest-labs/flux.2-klein-4b"
   createdAt: string
 }
 
@@ -120,11 +120,9 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         prompt: body.prompt,
-        mode: "base",
         width: 1024,
         height: 1024,
         steps: 4,
-        samples: 1,
       }),
       signal,
       cache: "no-store",
@@ -132,7 +130,7 @@ export async function POST(request: Request) {
 
     if (!upstream.ok) {
       const detail = await upstream.text().catch(() => "")
-      console.error("[ai-image] NVIDIA FLUX request failed", upstream.status, detail.slice(0, 400))
+      console.error("[ai-image] NVIDIA FLUX.2 Klein request failed", upstream.status, detail.slice(0, 400))
       if (upstream.status === 422) {
         return Response.json({ message: "The image provider couldn't generate that prompt. Try changing the wording." }, { status: 422 })
       }
@@ -153,11 +151,11 @@ export async function POST(request: Request) {
       return Response.json({ message: "The image provider couldn't create that image because the prompt was blocked by its content policy. Try rephrasing your prompt." }, { status: 422 })
     }
     if (artifact?.finishReason === "ERROR") {
-      console.error("[ai-image] NVIDIA FLUX reported an image generation error")
+      console.error("[ai-image] NVIDIA FLUX.2 Klein reported an image generation error")
       return Response.json({ message: "The image provider couldn't finish generating this image. Please retry with a simpler prompt." }, { status: 502 })
     }
     if (!isValidBase64(artifact?.base64) || (artifact.finishReason && artifact.finishReason !== "SUCCESS")) {
-      console.error("[ai-image] NVIDIA FLUX response did not contain a successful image artifact")
+      console.error("[ai-image] NVIDIA FLUX.2 Klein response did not contain a successful image artifact")
       return Response.json({ message: "The image provider returned an invalid image. Please try again." }, { status: 502 })
     }
 
@@ -180,7 +178,7 @@ export async function POST(request: Request) {
       prompt: body.prompt,
       imageUrl: blob.url,
       mimeType: "image/jpeg",
-      model: "black-forest-labs/flux.1-schnell",
+      model: "black-forest-labs/flux.2-klein-4b",
       createdAt: new Date().toISOString(),
     }
 
@@ -200,7 +198,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (request.signal.aborted) return new Response(null, { status: 499 })
     if (error instanceof Error && error.name === "TimeoutError") {
-      return Response.json({ message: "Image generation took too long. Please retry with a shorter or simpler prompt." }, { status: 504 })
+      return Response.json({ message: "Image generation is taking longer than the service limit. Please retry in a moment." }, { status: 504 })
     }
     console.error("[ai-image] Image generation request failed", error)
     return Response.json({ message: "Unable to generate or save the image right now. Please retry." }, { status: 502 })
