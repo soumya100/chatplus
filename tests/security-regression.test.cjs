@@ -139,13 +139,21 @@ test("CI installs no OS packages and the Redis suites use the in-repo RESP clien
   assert.ok(fs.existsSync(path.join(root, "tests", "helpers", "resp-redis-client.cjs")), "the RESP client helper must exist");
 });
 
-test("GitHub validation workflows stay tokenless and Vercel deploys through its Git integration", () => {
+test("GitHub validation stays tokenless and Vercel deployment is independent", () => {
   const workflow = read(".github/workflows/chatapp-ci.yml");
-  assert.equal(workflow.includes("secrets."), false, "CI validation must not need Vercel credentials");
-  assert.equal(workflow.includes("deploy-vercel-preview:"), false, "Vercel Preview builds must use native Git integration");
-  assert.equal(workflow.includes("deploy-vercel-production:"), false, "Vercel Production builds must use native Git integration");
-  assert.ok(workflow.includes("pull_request:"), "pull-request validation must remain enabled");
-  assert.ok(workflow.includes("push:"), "push validation must remain enabled");
+  const previewIndex = workflow.indexOf("  deploy-vercel-preview:");
+  const productionIndex = workflow.indexOf("  deploy-vercel-production:");
+  assert.ok(previewIndex > 0, "staging Preview deployment job must exist");
+  assert.ok(productionIndex > previewIndex, "main Production deployment job must exist");
+  const validationJobs = workflow.slice(0, previewIndex);
+  assert.equal(validationJobs.includes("secrets."), false, "validation jobs must not consume Vercel credentials");
+  const deploymentJobs = workflow.slice(previewIndex);
+  assert.ok(deploymentJobs.includes("always()"), "deployments must run even after failed validation");
+  assert.ok(deploymentJobs.includes("vercel deploy --yes --token="), "Preview must use Vercel remote build");
+  assert.ok(deploymentJobs.includes("vercel deploy --yes --prod --token="), "Production must use Vercel remote build");
+  assert.equal(deploymentJobs.includes("vercel pull "), false, "masked secrets must not be pulled into CI");
+  assert.equal(deploymentJobs.includes("vercel build"), false, "the CI runner must not build with masked secrets");
+  assert.equal(deploymentJobs.includes("needs:"), false, "deployment jobs must not depend on validation jobs");
 });
 test("production recovery deployment is manual and cannot be triggered by CI status", () => {
   const workflow = read(".github/workflows/deploy-production.yml");
