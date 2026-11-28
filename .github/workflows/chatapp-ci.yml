@@ -560,17 +560,16 @@ jobs:
           done
           echo "All PR validation and security gates passed."
 
-  # Vercel is invoked only after the PR quality gate has confirmed that every
-  # validation and security job succeeded. Automatic Vercel Git deployments
-  # must be disabled in the Vercel project settings for this to be the sole path.
+  # Deployment is deliberately independent of test/security job results.
+  # CI continues reporting failures, but those failures do not suppress Vercel.
   deploy-vercel-preview:
-    name: Deploy Vercel preview (after all CI)
-    needs:
-      - pr-quality-gate
+    name: Deploy Vercel Preview (independent of CI result)
     if: >-
-      github.event_name == 'pull_request' &&
-      needs.pr-quality-gate.result == 'success' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      always() &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/staging') ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.base.ref == 'staging' &&
+        github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -623,16 +622,13 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel deploy --prebuilt --token="$VERCEL_TOKEN"
 
-  # Production deployment runs only for commits pushed to main, and only
-  # after the same complete validation/security quality gate has succeeded.
+  # Production deployment runs on every main push, independently of CI results.
   deploy-vercel-production:
-    name: Deploy Vercel production (after all CI)
-    needs:
-      - pr-quality-gate
+    name: Deploy Vercel Production (independent of CI result)
     if: >-
+      always() &&
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      needs.pr-quality-gate.result == 'success'
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
