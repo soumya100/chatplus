@@ -568,8 +568,12 @@ jobs:
     name: Deploy Vercel Preview (independent of CI result)
     if: >-
       always() &&
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/staging'
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/staging') ||
+        (github.event_name == 'pull_request' &&
+         github.event.pull_request.head.ref == 'staging' &&
+         github.event.pull_request.base.ref == 'main')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -588,10 +592,10 @@ jobs:
             fi
           done
 
-      - name: Checkout staging commit
+      - name: Checkout staging commit (branch push or PR head)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
