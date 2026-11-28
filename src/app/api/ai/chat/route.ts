@@ -102,12 +102,31 @@ export async function POST(request: Request) {
   const apiKey = process.env.NVIDIA_API_KEY
   if (!apiKey) return Response.json({ message: "AI service is not configured. Please contact the administrator." }, { status: 503 })
 
-  let body: z.infer<typeof requestSchema>
+  let rawBody: unknown
   try {
-    body = requestSchema.parse(await request.json())
+    rawBody = await request.json()
   } catch {
-    return Response.json({ message: "Invalid chat request" }, { status: 400 })
+    return Response.json({ message: "Invalid chat request: request body must be valid JSON." }, { status: 400 })
   }
+
+  const parsedBody = requestSchema.safeParse(rawBody)
+  if (!parsedBody.success) {
+    // Log schema paths and issue codes only; never log prompts, file URLs,
+    // attachment names, or other user-supplied content.
+    console.warn("[ai-chat] Request validation failed", parsedBody.error.issues.map(issue => ({
+      path: issue.path.join("."),
+      code: issue.code,
+      message: issue.message,
+    })))
+    return Response.json({
+      message: "Invalid chat request",
+      details: parsedBody.error.issues.map(issue => ({
+        path: issue.path.join("."),
+        message: issue.message,
+      })),
+    }, { status: 400 })
+  }
+  const body: z.infer<typeof requestSchema> = parsedBody.data
 
   const limit = await rateLimit(session.user.id, "ai-chat", {
     limit: Math.max(1, Math.min(100, Number(process.env.AI_CHAT_RATE_LIMIT) || 20)),
