@@ -562,3 +562,108 @@ jobs:
             fi
           done
           echo "All PR validation and security gates passed."
+
+  # Vercel performs the build remotely, where the real environment secrets are
+  # available. Do not use "vercel pull" or local "vercel build" here: sensitive
+  # values are intentionally masked when pulled into GitHub Actions.
+  deploy-vercel-preview:
+    name: Deploy Vercel Preview (independent of CI result)
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Verify Vercel deployment credentials
+        env:
+          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "\${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Checkout staging commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: \${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@68.0.0
+
+      - name: Link Vercel project
+        env:
+          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Deploy Preview with Vercel remote build
+        env:
+          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --yes --token="$VERCEL_TOKEN"
+
+  deploy-vercel-production:
+    name: Deploy Vercel Production (independent of CI result)
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Verify Vercel deployment credentials
+        env:
+          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "\${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Checkout main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: \${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@68.0.0
+
+      - name: Link Vercel project
+        env:
+          VERCEL_ORG_ID: \${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: \${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Deploy Production with Vercel remote build
+        env:
+          VERCEL_TOKEN: \${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --yes --prod --token="$VERCEL_TOKEN"
