@@ -1,6 +1,7 @@
 "use client"
 
 import { FormEvent, useRef, useState } from "react"
+import Image from "next/image"
 import { Bot, ChevronDown, Code2, Download, FileText, Globe2, Image as ImageIcon, Loader2, Send, Sparkles, Trash2, User, Wand2 } from "lucide-react"
 
 type SearchSource = { title: string; url: string; snippet: string; publishedDate?: string }
@@ -229,7 +230,7 @@ export default function AIChat() {
                 {message.content || (busy && index === messages.length - 1 ? <span className="inline-flex items-center gap-2 text-slate-500"><Loader2 size={14} className="animate-spin"/> {imageMode ? "Generating your image…" : "Searching and thinking…"}</span> : null)}
               </div>
               {message.imageData && <div className="w-full overflow-hidden rounded-xl border border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-zinc-950">
-                <img src={message.imageData} alt="AI-generated image" className="h-auto max-h-[560px] w-full rounded-lg object-contain" />
+                <Image src={message.imageData} alt="AI-generated image" width={1024} height={1024} unoptimized className="h-auto max-h-[560px] w-full rounded-lg object-contain" />
                 <a href={message.imageData} download="chatplus-generated-image.jpg" className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><Download size={14}/> Download image</a>
                 <p className="mt-2 text-[10px] text-slate-400">Generated with NVIDIA Cosmos3 Nano. AI-generated content may contain inaccuracies.</p>
               </div>}
