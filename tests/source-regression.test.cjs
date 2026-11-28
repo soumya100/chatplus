@@ -58,6 +58,21 @@ test("protected API routes have an explicit authentication boundary", () => {
   assert.ok(resetConfirm.includes("rateLimit"))
 });
 
+test("AI attachment client sends metadata through Blob clientPayload and route validates it", () => {
+  const client = read("src/lib/ai/attachments.ts");
+  const route = read("src/app/api/ai/attachments/upload/route.ts");
+  assert.match(client, /clientPayload:\s*JSON\.stringify\(\{\s*contentType:\s*mimeType,\s*fileName\s*\}\)/);
+  assert.match(route, /onBeforeGenerateToken:\s*async\s*\(pathname,\s*clientPayload\)/);
+  assert.match(route, /JSON\.parse\(clientPayload\s*\|\|\s*"\{\}"\)/);
+  assert.doesNotMatch(route, /body\?\.payload\?\.contentType/);
+});
+
+test("AI image generation failure releases the composer and attachment control", () => {
+  const source = read("src/components/ai/AIChat.tsx");
+  assert.match(source, /setBusy\(false\)\s+setImageMode\(false\)\s+abortRef\.current\s*=\s*null/);
+  assert.match(source, /onClick=\{\(\)\s*=>\s*\{\s*if\s*\(imageMode\)\s*setImageMode\(false\);\s*fileInputRef\.current\?\.click\(\)\s*\}\}\s+disabled=\{busy\}/);
+});
+
 test("chat mounts the member manager and activity panel instead of only toggling state", () => {
   const source = read("src/components/Chat/index.tsx");
   assert.match(source, /<GroupMembersManager\b/);
