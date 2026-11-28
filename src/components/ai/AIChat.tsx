@@ -509,7 +509,7 @@ export default function AIChat() {
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white">{mode === "coding" ? "ChatPlus Code" : "ChatPlus AI"}</h1>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{imageMode ? "Image creation · NVIDIA FLUX.1-schnell" : "Powered by NVIDIA Nemotron"}</p>
+            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{imageMode ? "Image creation · NVIDIA FLUX.2 Klein 4B" : "Powered by NVIDIA Nemotron"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -619,7 +619,7 @@ export default function AIChat() {
                 </div> : null}
                 {message.imagePending && <div role="status" aria-label="Generating image" className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-950">
                   <div className="aspect-square w-full animate-pulse rounded-xl bg-gradient-to-br from-indigo-500/10 via-violet-500/15 to-slate-400/10"/>
-                  <p className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"><Loader2 size={14} className="animate-spin"/> Creating your image with FLUX.1-schnell…</p>
+                  <p className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400"><Loader2 size={14} className="animate-spin"/> Creating your image with FLUX.2 Klein 4B…</p>
                 </div>}
                 {message.imageData && <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-white/10 dark:bg-zinc-950">
                   <Image src={message.imageData} alt="AI-generated image" width={1024} height={1024} unoptimized className="h-auto max-h-[560px] w-full rounded-xl object-contain"/>
@@ -628,7 +628,7 @@ export default function AIChat() {
                     <a href={message.imageData} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><ImageIcon size={14}/> Open full size</a>
                     <button type="button" onClick={() => void generateImage(message.imagePrompt || "", false)} disabled={busy || !message.imagePrompt} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5"><Wand2 size={14}/> Regenerate</button>
                   </div>
-                  <p className="mt-2 text-[10px] text-slate-400">Generated with NVIDIA FLUX.1-schnell. AI-generated content may contain inaccuracies.</p>
+                  <p className="mt-2 text-[10px] text-slate-400">Generated with NVIDIA FLUX.2 Klein 4B. AI-generated content may contain inaccuracies.</p>
                 </div>}
                 {message.sources?.length ? <div className="w-full rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-950">
                   <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300"><Globe2 size={13}/> Sources</p>
@@ -660,7 +660,7 @@ export default function AIChat() {
         </div>}
         <form onSubmit={submit} className="border-t border-slate-200/80 bg-white/80 p-3 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/75 sm:p-4">
           {imageMode && <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="flex items-center gap-2 text-xs text-fuchsia-600 dark:text-fuchsia-300"><Wand2 size={13}/> Image generation · NVIDIA FLUX.1-schnell</p>
+            <p className="flex items-center gap-2 text-xs text-fuchsia-600 dark:text-fuchsia-300"><Wand2 size={13}/> Image generation · NVIDIA FLUX.2 Klein 4B</p>
             <p className="text-xs text-slate-500 dark:text-slate-300">1024 × 1024 · JPEG</p>
           </div>}
           {webSearch && !imageMode && <p className="mb-2 flex items-center gap-2 text-[11px] text-indigo-600 dark:text-indigo-300"><Globe2 size={13}/> Live web search is on. Your prompt is shared with Tavily to find current sources.</p>}
