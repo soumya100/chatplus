@@ -528,3 +528,15 @@ test("AI PDF export preserves Unicode and loads script-aware fonts on demand", (
   assert.doesNotMatch(route, /normalize\("NFKD"\)/);
   assert.doesNotMatch(route, /\[\^\x20-\x7E\]/);
 });
+
+
+test("AI attachment processing fetches only canonical Blob URLs from trusted ownership records", () => {
+  const processor = read("src/lib/ai/attachment-processing.ts");
+  const upload = read("src/app/api/ai/attachments/upload/route.ts");
+  assert.match(processor, /ownershipRecord\s*=\s*await db\.get/);
+  assert.match(processor, /ownership\.userId\s*!==\s*userId/);
+  assert.match(processor, /const blobUrl = ownership\.url/);
+  assert.doesNotMatch(processor, /fetch\(attachment\.url/);
+  assert.match(processor, /fetch\(blobUrl, \{[^}]*redirect:\s*"error"/);
+  assert.match(upload, /JSON\.stringify\(\{[\s\S]*userId:\s*metadata\.userId,[\s\S]*url:\s*blob\.url/);
+});
