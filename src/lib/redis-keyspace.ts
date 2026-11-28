@@ -4,7 +4,12 @@
  * Production keeps the historical unprefixed keys when REDIS_KEY_PREFIX is
  * unset. Set REDIS_KEY_PREFIX=staging: only on the staging deployment.
  */
-const configuredPrefix = process.env.REDIS_KEY_PREFIX || ""
+const rawConfiguredPrefix = process.env.REDIS_KEY_PREFIX?.trim() || ""
+// Accept the common "staging" form as well as the canonical "staging:".
+// Normalize before validation so a missing delimiter cannot break Preview builds.
+const configuredPrefix = rawConfiguredPrefix && !rawConfiguredPrefix.endsWith(":")
+    ? `${rawConfiguredPrefix}:`
+    : rawConfiguredPrefix
 
 if (configuredPrefix && !/^[a-z0-9][a-z0-9:_-]{0,62}:$/i.test(configuredPrefix)) {
     throw new Error("REDIS_KEY_PREFIX must be a short Redis-safe namespace ending in ':'")
