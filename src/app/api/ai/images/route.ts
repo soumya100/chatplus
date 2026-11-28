@@ -16,7 +16,7 @@ const requestSchema = z.object({
 
 const IMAGE_ENDPOINT = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.2-klein-4b"
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
-const PROVIDER_TIMEOUT_MS = 55_000
+const PROVIDER_TIMEOUT_MS = 45_000
 const HISTORY_LIMIT = 20
 const HISTORY_TTL_SECONDS = 60 * 60 * 24 * 365
 
