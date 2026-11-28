@@ -79,6 +79,7 @@ export async function uploadAIAttachment(
   const blob = await upload(fileName, uploadBody, {
     access: "public",
     handleUploadUrl: "/api/ai/attachments/upload",
+    clientPayload: JSON.stringify({ contentType: mimeType, fileName }),
     multipart: file.size > 5 * 1024 * 1024,
     onUploadProgress: event => onProgress?.(Math.round(event.percentage)),
   })
