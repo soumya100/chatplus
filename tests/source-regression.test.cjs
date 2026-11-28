@@ -16,7 +16,7 @@ function walk(directory) {
 test("the API route inventory is complete and every route exports an HTTP handler", () => {
   const apiRoot = path.join(root, "src/app/api");
   const routes = walk(apiRoot).filter(file => /route\.(ts|js)$/.test(file));
-  assert.equal(routes.length, 42, "update this inventory assertion when adding or removing API routes");
+  assert.equal(routes.length, 44, "update this inventory assertion when adding or removing API routes");
 
   for (const file of routes) {
     const source = fs.readFileSync(file, "utf8");
@@ -56,6 +56,21 @@ test("protected API routes have an explicit authentication boundary", () => {
   assert.ok(resetConfirm.includes("token: z.string().regex"))
   assert.ok(resetConfirm.includes("consume-password-reset-token-v1"))
   assert.ok(resetConfirm.includes("rateLimit"))
+});
+
+test("AI attachment client sends metadata through Blob clientPayload and route validates it", () => {
+  const client = read("src/lib/ai/attachments.ts");
+  const route = read("src/app/api/ai/attachments/upload/route.ts");
+  assert.match(client, /clientPayload:\s*JSON\.stringify\(\{\s*contentType:\s*mimeType,\s*fileName\s*\}\)/);
+  assert.match(route, /onBeforeGenerateToken:\s*async\s*\(pathname,\s*clientPayload\)/);
+  assert.match(route, /JSON\.parse\(clientPayload\s*\|\|\s*"\{\}"\)/);
+  assert.doesNotMatch(route, /body\?\.payload\?\.contentType/);
+});
+
+test("AI image generation failure releases the composer and attachment control", () => {
+  const source = read("src/components/ai/AIChat.tsx");
+  assert.match(source, /setBusy\(false\)\s+setImageMode\(false\)\s+abortRef\.current\s*=\s*null/);
+  assert.match(source, /onClick=\{\(\)\s*=>\s*\{\s*if\s*\(imageMode\)\s*setImageMode\(false\);\s*fileInputRef\.current\?\.click\(\)\s*\}\}\s+disabled=\{busy\}/);
 });
 
 test("chat mounts the member manager and activity panel instead of only toggling state", () => {
@@ -353,18 +368,121 @@ test("staging Redis keyspace prefix covers direct commands, Lua keys, pipelines,
   assert.match(example, /Leave UNSET in production/);
 });
 
-test("AI image generation is authenticated, quota-limited, and uses the configured NVIDIA endpoint", () => {
+test("AI image generation uses NVIDIA FLUX, persists results, and exposes retry and download actions", () => {
   const route = read("src/app/api/ai/images/route.ts");
   const ui = read("src/components/ai/AIChat.tsx");
   assert.match(route, /getServerSession\(authOptions\)/);
   assert.match(route, /rateLimit\(session\.user\.id,\s*"ai-image-generation"/);
   assert.match(route, /AI_IMAGE_GENERATION_ENABLED/);
-  assert.match(route, /https:\/\/ai\.api\.nvidia\.com\/v1\/cosmos\/nvidia\/cosmos3-nano/);
-  assert.match(route, /model_mode:\s*"text2image"/);
+  assert.match(route, /https:\/\/ai\.api\.nvidia\.com\/v1\/genai\/black-forest-labs\/flux\.2-klein-4b/);
+  assert.match(route, /model:\s*"black-forest-labs\/flux\.2-klein-4b"/);
+  assert.match(route, /result\.artifacts\?\.\[0\]/);
+  assert.match(route, /artifact\?\.base64/);
+  assert.match(route, /finishReason === "CONTENT_FILTERED"/);
+  assert.match(route, /finishReason === "ERROR"/);
+  assert.match(route, /AbortSignal\.timeout/);
+  assert.match(route, /steps:\s*4/);
+  assert.doesNotMatch(route, /cfg_scale:/);
   assert.match(route, /MAX_IMAGE_BYTES/);
+  assert.match(route, /await put\(/);
+  assert.match(route, /ai:generated-images:/);
+  assert.match(route, /export async function GET/);
   assert.match(ui, /fetch\("\/api\/ai\/images"/);
-  assert.match(ui, /download="chatplus-generated-image\.jpg"/);
+  assert.match(ui, /Retry image/);
+  assert.match(ui, /Open full size/);
+  assert.match(ui, /Regenerate/);
+  assert.match(ui, /anchor\.download\s*=\s*["']chatplus-generated-image\.jpg["']/);
+  assert.match(ui, /imagePending/);
 });
+
+test("AI attachments use direct Blob uploads, ownership checks, and bounded document extraction", () => {
+  const upload = read("src/app/api/ai/attachments/upload/route.ts");
+  const helper = read("src/lib/ai/attachments.ts");
+  const processor = read("src/lib/ai/attachment-processing.ts");
+  const chat = read("src/app/api/ai/chat/route.ts");
+  const conversation = read("src/app/api/ai/conversations/route.ts");
+  const ui = read("src/components/ai/AIChat.tsx");
+  const packageJson = JSON.parse(read("package.json"));
+
+  assert.equal(packageJson.dependencies["xlsx"], "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz");
+  assert.match(upload, /handleUpload/);
+  assert.match(upload, /BLOB_READ_WRITE_TOKEN/);
+  assert.match(upload, /UPLOAD_RATE_LIMIT_UNAVAILABLE/);
+  assert.match(upload, /Blob client-token generation failed/);
+  assert.match(upload, /onBeforeGenerateToken/);
+  assert.match(upload, /onUploadCompleted/);
+  assert.match(upload, /ai:attachment-owner:/);
+  assert.match(upload, /maximumSizeInBytes: MAX_FILE_SIZE/);
+  assert.match(upload, /BLOCKED_EXTENSIONS/);
+  assert.match(helper, /from "@vercel\/blob\/client"/);
+  assert.match(helper, /onUploadProgress/);
+  assert.match(helper, /AI_ATTACHMENT_MAX_FILES = 5/);
+  assert.match(helper, /AI_ATTACHMENT_MAX_TOTAL_SIZE = 30/);
+  assert.match(processor, /extractText\(bytes/);
+  assert.match(processor, /inflateRawSync/);
+  assert.match(processor, /parseXlsx/);
+  assert.match(processor, /summarizeLegacyXls/);
+  assert.match(processor, /XLSX\.read/);
+  assert.match(processor, /actualSize/);
+  assert.match(chat, /processed\.actualSize/);
+  assert.match(processor, /parseCsv/);
+  assert.match(processor, /ai:attachment-owner:/);
+  assert.match(processor, /12_000/);
+  assert.match(chat, /processAIAttachment/);
+  assert.match(chat, /type: "image_url"/);
+  assert.match(chat, /MODELS\.super/);
+  assert.match(chat, /24_000/);
+  assert.match(conversation, /export async function GET/);
+  assert.match(conversation, /export async function POST/);
+  assert.match(conversation, /export async function DELETE/);
+  assert.match(conversation, /ai:conversation:/);
+  assert.match(ui, /uploadAIAttachment/);
+  assert.match(ui, /onDrop=/);
+  assert.match(ui, /onPaste={handlePaste}/);
+  assert.match(ui, /Uploading /);
+  assert.match(ui, /message\.attachments/);
+});
+
+
+test("AI assistant workspace uses accessible premium controls and safe markdown rendering", () => {
+  const ui = read("src/components/ai/AIChat.tsx");
+  const markdown = read("src/components/ai/MarkdownMessage.tsx");
+  const styles = read("src/app/globals.css");
+  const nextConfig = read("next.config.mjs");
+
+  assert.match(ui, /Popover\.Panel/);
+  assert.match(ui, /Menu\.Items/);
+  assert.match(ui, /Choose a model/);
+  assert.match(ui, /Export PDF/);
+  assert.match(ui, /Clear chat/);
+  assert.match(ui, /max-w-3xl/);
+  assert.match(ui, /role="log"/);
+  assert.match(ui, /aria-relevant="additions text"/);
+  assert.match(ui, /aria-pressed=\{model === "super"\}/);
+  assert.match(ui, /aria-label="Copy message"/);
+  assert.match(ui, /MarkdownMessage/);
+  assert.match(ui, /Stop generating/);
+  assert.match(ui, /scrollToBottom/);
+  assert.match(ui, /Debug my code/);
+  assert.match(ui, /Summarize a PDF/);
+  assert.match(ui, /Analyze a CSV/);
+  assert.match(ui, /TextareaAutosize/);
+  assert.match(ui, /Web search/);
+  assert.match(ui, /Create image/);
+  assert.match(ui, /ThumbsUp/);
+  assert.match(ui, /ThumbsDown/);
+  assert.match(ui, /Regenerate response/);
+  assert.match(ui, /Edit message/);
+  assert.match(markdown, /CodeBlock/);
+  assert.match(markdown, /Copy code/);
+  assert.match(markdown, /<table/);
+  assert.match(markdown, /new URL/);
+  assert.match(markdown, /url\.protocol/);
+  assert.match(styles, /ai-message-enter/);
+  assert.match(styles, /ai-scrollbar/);
+  assert.match(nextConfig, /public\.blob\.vercel-storage\.com/);
+});
+
 
 test("AI PDF export is authenticated, bounded, quota-limited, and returns a private PDF attachment", () => {
   const route = read("src/app/api/ai/pdf/route.ts");
@@ -429,4 +547,16 @@ test("AI PDF export preserves Unicode and loads script-aware fonts on demand", (
   assert.match(route, /noto-sans-data/);
   assert.doesNotMatch(route, /normalize\("NFKD"\)/);
   assert.doesNotMatch(route, /\[\^\x20-\x7E\]/);
+});
+
+
+test("AI attachment processing fetches only canonical Blob URLs from trusted ownership records", () => {
+  const processor = read("src/lib/ai/attachment-processing.ts");
+  const upload = read("src/app/api/ai/attachments/upload/route.ts");
+  assert.match(processor, /ownershipRecord\s*=\s*await db\.get/);
+  assert.match(processor, /ownership\.userId\s*!==\s*userId/);
+  assert.match(processor, /const blobUrl = ownership\.url/);
+  assert.doesNotMatch(processor, /fetch\(attachment\.url/);
+  assert.match(processor, /fetch\(blobUrl, \{[^}]*redirect:\s*"error"/);
+  assert.match(upload, /JSON\.stringify\(\{[\s\S]*userId:\s*metadata\.userId,[\s\S]*url:\s*blob\.url/);
 });

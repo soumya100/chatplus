@@ -15,6 +15,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'avatars.githubusercontent.com',
       },
+      {
+        protocol: 'https',
+        hostname: '**.public.blob.vercel-storage.com',
+        pathname: '/**',
+      },
     ],
   },
   // VAPT Security Hardening: Defense-in-depth HTTP Response Headers

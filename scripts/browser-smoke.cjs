@@ -206,6 +206,9 @@ async function exerciseBrowser(name, browserType) {
     const isNextScriptChunk =
       request.resourceType() === "script" &&
       requestUrlObject.pathname.startsWith("/_next/static/chunks/");
+    // Next.js font and media assets can also be cancelled while their
+    // originating document is being replaced; only known abort errors qualify.
+    const isNextStaticAsset = requestUrlObject.pathname.startsWith("/_next/static/");
     const knownBrowserAbort = [
       "net::ERR_ABORTED",
       "NS_BINDING_ABORTED",
@@ -214,7 +217,7 @@ async function exerciseBrowser(name, browserType) {
     const expectedNavigationAbort =
       request.method() === "GET" &&
       knownBrowserAbort &&
-      (isRscRequest || isFaviconRequest || isNextScriptChunk || supersededByNavigation);
+      (isRscRequest || isFaviconRequest || isNextScriptChunk || isNextStaticAsset || supersededByNavigation);
     if (!expectedNavigationAbort) {
       failedRequests.push(`${request.method()} ${requestUrl}: ${errorText}`);
     }
