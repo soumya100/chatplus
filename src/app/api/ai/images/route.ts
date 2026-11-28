@@ -180,7 +180,7 @@ export async function POST(request: Request) {
       prompt: body.prompt,
       imageUrl: blob.url,
       mimeType: "image/jpeg",
-      model: "black-forest-labs/flux.1-dev",
+      model: "black-forest-labs/flux.1-schnell",
       createdAt: new Date().toISOString(),
     }
 
