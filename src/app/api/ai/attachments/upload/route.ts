@@ -109,7 +109,10 @@ export async function POST(request: Request) {
         if (!metadata.userId || !isOwnedBlobUrl(blob.url)) {
           throw new Error("Unable to verify uploaded file ownership")
         }
-        await db.set("ai:attachment-owner:" + blob.url, metadata.userId, {
+        await db.set("ai:attachment-owner:" + blob.url, JSON.stringify({
+          userId: metadata.userId,
+          url: blob.url,
+        }), {
           ex: OWNER_TTL_SECONDS,
         })
       },
