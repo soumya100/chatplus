@@ -436,6 +436,7 @@ export default function AIChat() {
       }
     } finally {
       setBusy(false)
+      setImageMode(false)
       abortRef.current = null
       if (shouldAutoScrollRef.current) {
         const container = scrollContainerRef.current
