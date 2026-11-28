@@ -14,7 +14,7 @@ const requestSchema = z.object({
   prompt: z.string().trim().min(1).max(4000),
 }).strict()
 
-const IMAGE_ENDPOINT = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-dev"
+const IMAGE_ENDPOINT = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell"
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 const PROVIDER_TIMEOUT_MS = 50_000
 const HISTORY_LIMIT = 20
@@ -25,7 +25,7 @@ type GeneratedImageRecord = {
   prompt: string
   imageUrl: string
   mimeType: "image/jpeg"
-  model: "black-forest-labs/flux.1-dev"
+  model: "black-forest-labs/flux.1-schnell"
   createdAt: string
 }
 
@@ -121,10 +121,9 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         prompt: body.prompt,
         mode: "base",
-        cfg_scale: 5,
         width: 1024,
         height: 1024,
-        steps: 35,
+        steps: 4,
         samples: 1,
       }),
       signal,
