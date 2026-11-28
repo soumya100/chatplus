@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     const result = await handleUpload({
       body,
       request,
-      onBeforeGenerateToken: async (pathname) => {
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
         const session = await getServerSession(authOptions)
         if (!session?.user?.id) throw new Error("Unauthorized")
 
@@ -90,11 +90,20 @@ export async function POST(request: Request) {
         }
         if (!quota.success) throw new Error("UPLOAD_RATE_LIMITED")
 
-        const contentType = String(body?.payload?.contentType || "")
+        let uploadMetadata: { contentType?: string; fileName?: string } = {}
+        try {
+          uploadMetadata = JSON.parse(clientPayload || "{}")
+        } catch {
+          throw new Error("Invalid upload metadata")
+        }
+
+        // The Blob SDK sends application metadata through clientPayload, not
+        // body.payload. Reading body.payload.contentType rejects every upload.
+        const contentType = String(uploadMetadata.contentType || "")
           .split(";")[0].trim().toLowerCase()
         if (!ALLOWED_TYPES.has(contentType)) throw new Error("Unsupported file content type")
 
-        const filename = safeFilename(pathname)
+        const filename = safeFilename(uploadMetadata.fileName || pathname)
         const extension = filename.includes(".") ? filename.split(".").pop()?.toLowerCase() || "" : ""
         if (BLOCKED_EXTENSIONS.has(extension)) throw new Error("This active or executable file format cannot be uploaded")
 
