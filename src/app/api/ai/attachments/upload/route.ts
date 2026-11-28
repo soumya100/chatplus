@@ -59,6 +59,10 @@ function safeFilename(value: unknown): string {
 }
 
 export async function POST(request: Request) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return Response.json({ error: "File storage is not configured for this deployment. Add BLOB_READ_WRITE_TOKEN to the Preview environment and redeploy." }, { status: 503 })
+  }
+
   let body: any
   try {
     body = await request.json()
@@ -74,10 +78,16 @@ export async function POST(request: Request) {
         const session = await getServerSession(authOptions)
         if (!session?.user?.id) throw new Error("Unauthorized")
 
-        const quota = await rateLimit(session.user.id, "ai-attachment-upload", {
-          limit: 20,
-          windowSeconds: 60 * 60,
-        })
+        let quota
+        try {
+          quota = await rateLimit(session.user.id, "ai-attachment-upload", {
+            limit: 20,
+            windowSeconds: 60 * 60,
+          })
+        } catch (error) {
+          console.error("[ai-attachment-upload] Rate-limit service unavailable", error instanceof Error ? error.message : "unknown error")
+          throw new Error("UPLOAD_RATE_LIMIT_UNAVAILABLE")
+        }
         if (!quota.success) throw new Error("UPLOAD_RATE_LIMITED")
 
         const contentType = String(body?.payload?.contentType || "")
@@ -121,7 +131,19 @@ export async function POST(request: Request) {
     return Response.json(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to upload attachment"
-    const status = message === "Unauthorized" ? 401 : message === "UPLOAD_RATE_LIMITED" ? 429 : 400
-    return Response.json({ error: status === 400 ? "Unable to upload this file. Check its format and size." : message }, { status })
+    const status = message === "Unauthorized" ? 401
+      : message === "UPLOAD_RATE_LIMITED" ? 429
+      : message === "UPLOAD_RATE_LIMIT_UNAVAILABLE" ? 503
+      : 400
+    if (status >= 500) {
+      console.error("[ai-attachment-upload] Blob client-token generation failed", {
+        name: error instanceof Error ? error.name : "UnknownError",
+        message: message.slice(0, 240),
+      })
+    }
+    const safeMessage = status === 400
+      ? "Unable to upload this file. Check its format and size."
+      : message
+    return Response.json({ error: safeMessage }, { status })
   }
 }
