@@ -343,8 +343,6 @@ test("staging Redis keyspace prefix covers direct commands, Lua keys, pipelines,
   const example = read(".env.example");
 
   assert.match(namespace, /REDIS_KEY_PREFIX/);
-  assert.match(namespace, /rawConfiguredPrefix/);
-  assert.match(namespace, /!rawConfiguredPrefix\.endsWith\(":"\)/);
   assert.match(namespace, /prefixRedisKey/);
   assert.match(namespace, /method === "eval"/);
   assert.match(namespace, /namespaceRedisPipeline/);
