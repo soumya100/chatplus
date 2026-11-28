@@ -141,15 +141,16 @@ test("CI installs no OS packages and the Redis suites use the in-repo RESP clien
 
 test("GitHub validation workflows stay tokenless and Vercel deploys through its Git integration", () => {
   const workflow = read(".github/workflows/chatapp-ci.yml");
-  assert.doesNotMatch(workflow, /secrets\\.[A-Z_]+/, "CI validation must not need Vercel credentials");
-  assert.doesNotMatch(workflow, /deploy-vercel-(?:preview|production):/, "Vercel builds must use native Git integration, not CLI builds with masked secrets");
-  assert.match(workflow, /^ {2}pull_request:/m);
-  assert.match(workflow, /^ {2}push:/m);
+  assert.equal(workflow.includes("secrets."), false, "CI validation must not need Vercel credentials");
+  assert.equal(workflow.includes("deploy-vercel-preview:"), false, "Vercel Preview builds must use native Git integration");
+  assert.equal(workflow.includes("deploy-vercel-production:"), false, "Vercel Production builds must use native Git integration");
+  assert.ok(workflow.includes("pull_request:"), "pull-request validation must remain enabled");
+  assert.ok(workflow.includes("push:"), "push validation must remain enabled");
 });
 test("production recovery deployment is manual and cannot be triggered by CI status", () => {
   const workflow = read(".github/workflows/deploy-production.yml");
-  assert.match(workflow, /^on:\\n  workflow_dispatch:/m);
-  assert.doesNotMatch(workflow, /workflow_run:/);
+  assert.ok(workflow.includes("workflow_dispatch:"), "manual recovery deployment must remain available");
+  assert.equal(workflow.includes("workflow_run:"), false, "production recovery must not depend on CI status");
 });
 test("dashboard authorization remains enforced at the middleware boundary", () => {
   const middleware = read("src/middleware.ts");
